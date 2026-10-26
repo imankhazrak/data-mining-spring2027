@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L10 · Neural Networks · Data Mining</title>
+<meta name="description" content="Feed-forward neural networks for classification and prediction: neurons, activation functions, forward pass, backpropagation, and tuning hidden size and weight decay.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="10">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Neural Networks</h1>
+  <p class="lede">A neural network is a stack of logistic regressions feeding into each other. That stacking lets it bend decision boundaries into almost any shape, at the price of interpretability, tuning effort and a real appetite for overfitting. Today we open the box and train one live.</p>
+  <div class="lec-meta"><span class="pill">~80 min</span><span class="pill">Textbook ch. 11</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"lg","label":"Logistic regression (L4)","x":115,"y":50,"state":"prev","href":"L4"},
+ {"id":"n","label":"Neuron = weighted sum + activation","x":405,"y":50,"state":"today","href":"#neuron"},
+ {"id":"a","label":"Architecture","x":180,"y":150,"state":"today","href":"#arch"},
+ {"id":"b","label":"Backpropagation","x":380,"y":150,"state":"today","href":"#train"},
+ {"id":"t","label":"Tune size & decay","x":580,"y":150,"state":"today","href":"#tune"},
+ {"id":"cv","label":"Cross-validation (L3)","x":660,"y":50,"state":"prev","href":"L3"},
+ {"id":"dl","label":"Deep learning (beyond)","x":620,"y":210,"state":"later","href":"#tune"}],
+ "edges":[["lg","n","one neuron ≈ logistic"],["n","a"],["a","b"],["b","t"],["cv","t"],["t","dl"]]}'></div>
+</section>
+
+<section class="lsec" id="neuron">
+<h2>One neuron</h2>
+<p>A neuron (node) takes inputs \(x_1,\dots,x_p\), forms a weighted sum plus a bias, and passes it through an <b>activation function</b> \(g\):</p>
+<div class="formula">\[ \text{output} = g\!\left(\theta + \sum_{i} w_i x_i\right), \qquad g(s) = \frac{1}{1 + e^{-s}} \ \text{(logistic/sigmoid)} \]</div>
+<p>With a sigmoid activation, a single neuron <em>is</em> logistic regression. Other common activations are tanh (range −1 to 1) and ReLU, \(\max(0, s)\), the default in deep learning.</p>
+<div class="predict" data-answer="c">
+  <div class="q">Cheese tasting (TinyData): a hidden node has bias −0.3 and weights 0.05 on Fat and 0.01 on Salt. For a cheese with Fat = 0.2, Salt = 0.9, what does the node output (sigmoid)?</div>
+  <div class="opts"><button class="opt">0.30</button><button class="opt">0.50</button><button class="opt">about 0.43</button><button class="opt">about 0.57</button></div>
+  <div class="reveal"><p><b>≈ 0.43.</b> s = −0.3 + 0.05·0.2 + 0.01·0.9 = −0.281, and 1/(1 + e<sup>0.281</sup>) ≈ 0.430. This is exactly the first step of the textbook’s worked example. Every node in the network repeats it.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="arch">
+<h2>Architecture: layers of neurons</h2>
+<div class="two-col" style="align-items:center">
+<svg viewBox="0 0 360 220" role="img" aria-label="Network with 2 inputs, 3 hidden nodes and 1 output" style="width:100%;max-width:360px">
+  <g stroke="var(--border-strong)" stroke-width="1.2">
+    <line x1="50" y1="70" x2="180" y2="40"/><line x1="50" y1="70" x2="180" y2="110"/><line x1="50" y1="70" x2="180" y2="180"/>
+    <line x1="50" y1="150" x2="180" y2="40"/><line x1="50" y1="150" x2="180" y2="110"/><line x1="50" y1="150" x2="180" y2="180"/>
+    <line x1="180" y1="40" x2="310" y2="110"/><line x1="180" y1="110" x2="310" y2="110"/><line x1="180" y1="180" x2="310" y2="110"/>
+  </g>
+  <g font-family="Inter,sans-serif" font-size="12" text-anchor="middle">
+    <circle cx="50" cy="70" r="18" fill="var(--info-soft)" stroke="var(--info)"/><text x="50" y="74" fill="var(--text)">Fat</text>
+    <circle cx="50" cy="150" r="18" fill="var(--info-soft)" stroke="var(--info)"/><text x="50" y="154" fill="var(--text)">Salt</text>
+    <circle cx="180" cy="40" r="18" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="180" y="44" fill="var(--text)">h₁</text>
+    <circle cx="180" cy="110" r="18" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="180" y="114" fill="var(--text)">h₂</text>
+    <circle cx="180" cy="180" r="18" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="180" y="184" fill="var(--text)">h₃</text>
+    <circle cx="310" cy="110" r="20" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="310" y="114" fill="var(--text)">like?</text>
+    <text x="50" y="212" fill="var(--muted)">input</text><text x="180" y="212" fill="var(--muted)">hidden</text><text x="310" y="212" fill="var(--muted)">output</text>
+  </g>
+</svg>
+<div>
+<ul>
+  <li><b>Input layer:</b> one node per predictor, after scaling to [0, 1] and creating dummies.</li>
+  <li><b>Hidden layer(s):</b> each node learns its own weighted combination of the inputs, a learned feature.</li>
+  <li><b>Output layer:</b> one node for a binary or numeric outcome, or one per class (with softmax) for multiclass.</li>
+</ul>
+<p>Parameters to learn: 2×3 + 3 biases + 3 + 1 bias = <b>13</b> here. With 12 predictors and 7 hidden nodes, it’s 12×7 + 7 + 7 + 1 = 99.</p>
+</div></div>
+</section>
+
+<section class="lsec" id="train">
+<h2>Training: backpropagation, live</h2>
+<p>Weights start small and random. For each batch of records, the network makes predictions (forward pass), measures the error, and sends that error <b>backwards</b> through the layers to compute how each weight contributed to it. Each weight then takes a small step downhill:</p>
+<div class="formula">\[ w \leftarrow w - \eta \, \frac{\partial\, \text{Loss}}{\partial w} \qquad (\eta = \text{learning rate}) \]</div>
+<div class="demo">
+  <div class="dh"><b>Train a network in your browser</b><span class="muted small">2 inputs → hidden layer (tanh) → sigmoid output</span></div>
+  <div class="db">
+    <canvas id="nnCanvas" aria-label="Neural network decision boundary during training"></canvas>
+    <div class="controls">
+      <label>Data <select id="nnData"><option value="xor">XOR (four corners)</option><option value="circle">Circle</option><option value="moons">Two moons</option><option value="line">Linear</option></select></label>
+      <label>Hidden nodes <input type="range" id="nnH" min="1" max="10" value="4"><output id="nnHV">4</output></label>
+      <label>Weight decay <select id="nnDecay"><option value="0">0</option><option value="0.001" selected>0.001</option><option value="0.01">0.01</option><option value="0.1">0.1</option></select></label>
+      <label>Learning rate <select id="nnLR"><option value="0.03">0.03</option><option value="0.1" selected>0.1</option><option value="0.3">0.3</option><option value="1">1.0</option></select></label>
+      <button class="btn sm primary" id="nnPlay">▶ Train</button><button class="btn sm" id="nnReset">Reset weights</button>
+    </div>
+    <div class="stats" id="nnStats"></div>
+    <p class="hint">XOR cannot be separated by one straight line, so logistic regression (1 hidden node) fails. Try 1 node, then 2, then 4. On “Two moons” with 10 nodes and decay 0, the boundary wraps around individual noisy points; raise decay to 0.1 and it smooths out. A learning rate of 1.0 can make the loss bounce instead of descend.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="tune">
+<h2>Tuning and practical rules</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Knob</th><th>Effect</th><th>Typical choice</th></tr></thead>
+<tbody>
+<tr><td><b>Hidden nodes</b> (<code>size</code>)</td><td>More nodes, more flexible boundary, more overfitting</td><td>Tune 1–10 by CV for tabular data</td></tr>
+<tr><td><b>Weight decay</b> (<code>decay</code> / <code>alpha</code>)</td><td>L2 penalty on weights (ridge for networks); smooths the fit</td><td>Tune 0.0001–1 by CV</td></tr>
+<tr><td><b>Input scaling</b></td><td>Unscaled inputs saturate sigmoids and slow learning</td><td>Rescale to [0, 1] (min-max)</td></tr>
+<tr><td><b>Epochs / stopping</b></td><td>Too many iterations overfit</td><td>Early stopping on validation loss</td></tr>
+<tr><td><b>Random start</b></td><td>Different seeds give different local optima</td><td>Set a seed; average several fits</td></tr>
+</tbody></table></div>
+<p>On Universal Bank, 5-fold CV over size ∈ {1, 3, 5, 7} and decay ∈ {0.0001, 0.01, 0.1, 1} picks <b>7 hidden nodes with decay 0.1</b> (CV accuracy 0.982). The 1-node network gets stuck at 0.904, the naive rule. On the validation set the tuned network reaches accuracy ≈ 0.976, sensitivity ≈ 0.86 and AUC ≈ 0.98, the best so far. In the 2023 class project on breast-cancer data, a similar tuned single-layer network (5 nodes, decay 0.1) also won, with test accuracy 0.977.</p>
+<div class="predict" data-answer="b">
+  <div class="q">The network outperforms the tree on accuracy. A loan officer asks <em>why</em> a particular applicant was rejected. Which model would you rather defend?</div>
+  <div class="opts"><button class="opt">The network: it is more accurate, so its reasons are better</button><button class="opt">The tree (or logistic regression): its rules and coefficients can be explained; a network’s 99 weights cannot</button><button class="opt">Neither can be explained</button></div>
+  <div class="reveal"><p><b>B.</b> Accuracy is not the only criterion. In regulated settings such as credit, health and hiring, explainability can outweigh a point of accuracy. Post-hoc tools (variable importance, SHAP, partial dependence) help, but they are approximations.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: tune a network for loan acceptance</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/UniversalBank.csv" download>UniversalBank.csv</a>. A smaller practice set: <a href="../data/accidentsnn.csv" download>accidentsnn.csv</a>.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Scale to [0, 1] and tune size × decay</h3>
+<pre class="code r">
+library(caret); library(nnet)
+bank <- read.csv("data/UniversalBank.csv")[, -c(1, 5)]
+bank$Education <- factor(bank$Education, labels = c("Undergrad", "Graduate", "Advanced"))
+bank$Personal.Loan <- factor(bank$Personal.Loan, labels = c("No", "Yes"))
+set.seed(1)
+idx <- createDataPartition(bank$Personal.Loan, p = 0.6, list = FALSE)
+train <- bank[idx, ]; valid <- bank[-idx, ]
+grid <- expand.grid(size = c(1, 3, 5, 7), decay = c(0.0001, 0.01, 0.1, 1))
+nn_fit <- train(Personal.Loan ~ ., data = train, method = "nnet",
+                preProcess = "range",               # min-max scaling to [0, 1]
+                tuneGrid = grid, maxit = 500, trace = FALSE,
+                trControl = trainControl(method = "cv", number = 5))
+nn_fit$bestTune; plot(nn_fit)
+</pre>
+<pre class="code py">
+import pandas as pd
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.neural_network import MLPClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import MinMaxScaler
+bank = pd.read_csv("data/UniversalBank.csv").drop(columns=["ID", "ZIP Code"])
+bank["Education"] = pd.Categorical(bank["Education"].map({1: "Undergrad", 2: "Graduate", 3: "Advanced"}),
+                                   categories=["Undergrad", "Graduate", "Advanced"])
+X = pd.get_dummies(bank.drop(columns="Personal Loan"), drop_first=True, dtype=int); y = bank["Personal Loan"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1, stratify=y)
+pipe = make_pipeline(MinMaxScaler(), MLPClassifier(solver="lbfgs", max_iter=2000, random_state=1))
+grid = GridSearchCV(pipe, {"mlpclassifier__hidden_layer_sizes": [(1,), (3,), (5,), (7,)],
+                           "mlpclassifier__alpha": [0.0001, 0.01, 0.1, 1]},
+                    cv=StratifiedKFold(5, shuffle=True, random_state=1), scoring="accuracy")
+grid.fit(X_train, y_train)
+print(grid.best_params_, round(grid.best_score_, 4))
+</pre>
+<div class="see"><b>What you should see:</b> the best setting has 5–7 hidden nodes with moderate decay, and CV accuracy ≈ 0.98. Networks with 1 node do no better than the naive rule.</div>
+</div>
+<div class="step" data-step="2"><h3>Validate</h3>
+<pre class="code r">
+pred <- predict(nn_fit, valid)
+confusionMatrix(pred, valid$Personal.Loan, positive = "Yes")
+prob <- predict(nn_fit, valid, type = "prob")[, "Yes"]
+pROC::auc(valid$Personal.Loan, prob)
+</pre>
+<pre class="code py">
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score
+pred, prob = grid.predict(X_valid), grid.predict_proba(X_valid)[:, 1]
+print(accuracy_score(y_valid, pred), recall_score(y_valid, pred), roc_auc_score(y_valid, prob))
+</pre>
+</div>
+<div class="step" data-step="3"><h3>Peek inside (optional)</h3>
+<pre class="code r">
+library(NeuralNetTools)
+plotnet(nn_fit$finalModel)      # line width = weight size, colour = sign
+garson(nn_fit$finalModel)       # relative importance of inputs
+</pre>
+<pre class="code py">
+from sklearn.inspection import permutation_importance
+imp = permutation_importance(grid, X_valid, y_valid, n_repeats=10, random_state=1)
+print(pd.Series(imp.importances_mean, index=X.columns).sort_values(ascending=False).round(4))
+</pre>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Unscaled inputs:</b> slow or failed training.</li>
+  <li><b>No seed:</b> results change from run to run; report the seed and, ideally, an average over several starts.</li>
+  <li><b>Tuning on the test set</b>, or on training accuracy.</li>
+  <li><b>Too little data for the parameter count.</b> A rough guide is at least 10 records per weight.</li>
+  <li><b>Assuming “deep” is better for tabular data.</b> For spreadsheets, a well-tuned ensemble (L11) often wins.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="a"><div class="q">A network with no hidden layer and a sigmoid output is equivalent to…</div><div class="opts"><button class="opt">logistic regression</button><button class="opt">kNN</button><button class="opt">a decision tree</button><button class="opt">PCA</button></div><div class="why">Weighted sum + logistic function.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Weight decay in a neural network plays the same role as…</div><div class="opts"><button class="opt">the cutoff in classification</button><button class="opt">k in kNN</button><button class="opt">the ridge penalty in regression</button><button class="opt">the number of folds in CV</button></div><div class="why">An L2 penalty on weights, shrinking them toward 0.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Backpropagation is used to…</div><div class="opts"><button class="opt">choose the number of hidden nodes</button><button class="opt">compute the gradient of the loss with respect to every weight</button><button class="opt">scale the inputs</button><button class="opt">prune the network</button></div><div class="why">It applies the chain rule layer by layer, backwards.</div></div>
+  <div class="qq" data-answer="d"><div class="q">How many weights and biases in a network with 4 inputs, one hidden layer of 3 nodes and 1 output?</div><div class="opts"><button class="opt">7</button><button class="opt">12</button><button class="opt">15</button><button class="opt">19</button></div><div class="why">4×3 + 3 biases + 3×1 + 1 bias = 19.</div></div>
+  <div class="qq" data-answer="b"><div class="q">A very large learning rate typically causes…</div><div class="opts"><button class="opt">slow but steady convergence</button><button class="opt">the loss to oscillate or diverge</button><button class="opt">more hidden nodes</button><button class="opt">automatic regularisation</button></div><div class="why">Steps overshoot the minimum.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w10.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

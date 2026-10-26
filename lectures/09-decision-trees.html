@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L09 · Classification & Regression Trees · Data Mining</title>
+<meta name="description" content="Classification and regression trees: recursive partitioning, Gini and entropy impurity, stopping and cost-complexity pruning, rules and variable importance.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="9">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Classification & Regression Trees</h1>
+  <p class="lede">A decision tree asks one yes/no question at a time until the answer is obvious. The result reads like a flowchart a loan officer could follow, which is why trees are loved in practice and are the building block of the strongest ensembles in Lecture 11.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 9</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"k","label":"kNN (L8)","x":90,"y":50,"state":"prev","href":"L8"},
+ {"id":"rp","label":"Recursive partitioning","x":300,"y":50,"state":"today","href":"#split"},
+ {"id":"imp","label":"Impurity (Gini)","x":520,"y":50,"state":"today","href":"#impurity"},
+ {"id":"of","label":"Overfit full tree","x":220,"y":150,"state":"today","href":"#prune"},
+ {"id":"pr","label":"Prune (cp / α)","x":420,"y":150,"state":"today","href":"#prune"},
+ {"id":"rules","label":"Rules & importance","x":620,"y":150,"state":"today","href":"#rules"},
+ {"id":"ens","label":"Ensembles (L11)","x":640,"y":210,"state":"later","href":"L11"}],
+ "edges":[["k","rp","also nonparametric"],["rp","imp"],["rp","of"],["of","pr"],["pr","rules"],["pr","ens"]]}'></div>
+</section>
+
+<section class="lsec" id="split">
+<h2>Recursive partitioning</h2>
+<p>Start with all training records in one box (the <b>root</b>). Then repeat:</p>
+<ol>
+  <li>For every predictor and every possible split value, split the box in two and measure how <b>pure</b> the two halves are.</li>
+  <li>Keep the single best split.</li>
+  <li>Apply the same procedure inside each half, and so on, until a stopping rule is met.</li>
+</ol>
+<p>The final boxes are <b>leaves</b>. A new record is dropped down the tree, and its leaf’s majority class (or average Y, for a regression tree) is the prediction. Because each split uses one variable, the boxes are always rectangles with edges parallel to the axes.</p>
+<div class="demo">
+  <div class="dh"><b>Grow a tree on income × credit-card spending</b><span class="muted small">700 bank customers with a graduate or advanced degree · 60% train / 40% validation</span></div>
+  <div class="db">
+    <canvas id="treeCanvas" aria-label="Recursive partitioning on two predictors"></canvas>
+    <div class="controls">
+      <label>Max depth <input type="range" id="tDepth" min="0" max="10" value="2"><output id="tDepthV">2</output></label>
+      <label>Min leaf size <input type="range" id="tLeaf" min="1" max="40" value="1"><output id="tLeafV">1</output></label>
+      <label><input type="checkbox" id="tValid"> show validation points</label>
+    </div>
+    <div class="stats" id="treeStats"></div>
+    <pre class="output" id="treeRules" aria-label="Tree rules"></pre>
+    <p class="hint">Depth 1: a single split on Income already lifts validation accuracy from the naive 89% to about 97%. Validation accuracy peaks around depth 3; push to depth 10 with leaf size 1 and tiny boxes chase individual customers: training accuracy climbs toward 100% while validation accuracy slips. Raise the minimum leaf size to see a simple fix.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="impurity">
+<h2>Measuring purity</h2>
+<p>For a box where a fraction \(p_k\) of the records belong to class \(k\):</p>
+<div class="formula">\[ \text{Gini} = 1 - \sum_k p_k^2 \qquad\qquad \text{Entropy} = -\sum_k p_k \log_2 p_k \]</div>
+<p>Both are 0 for a pure box and largest for a 50/50 mix (Gini 0.5, entropy 1). A split is scored by the <b>weighted average</b> impurity of its two children; the best split gives the largest drop from the parent. Regression trees use the sum of squared deviations from the box mean instead.</p>
+<div class="predict" data-answer="b">
+  <div class="q">A box has 90 non-acceptors and 10 acceptors. What is its Gini impurity?</div>
+  <div class="opts"><button class="opt">0.10</button><button class="opt">0.18</button><button class="opt">0.50</button><button class="opt">0.90</button></div>
+  <div class="reveal"><p><b>0.18.</b> 1 − (0.9² + 0.1²) = 1 − 0.82 = 0.18. It is fairly pure, but not perfectly, so the tree may still look for a split inside it.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="prune">
+<h2>Overfitting and pruning</h2>
+<p>Left alone, a tree keeps splitting until every leaf is pure. On the full bank data (all 11 predictors), the unpruned tree has <b>43 leaves, depth 10 and 100% training accuracy</b>. Two remedies:</p>
+<ul>
+  <li><b>Stop early:</b> limit depth, require a minimum number of records to split or per leaf, or require a minimum impurity decrease.</li>
+  <li><b>Grow then prune (preferred):</b> grow a large tree, then cut back weak branches using <b>cost complexity</b>:</li>
+</ul>
+<div class="formula">\[ \text{cost}(T) = \text{misclassification error}(T) + \alpha \cdot |\text{leaves}(T)| \]</div>
+<p>Each α gives a different best subtree; choose α by cross-validation. In R’s <code>rpart</code> this is the complexity parameter <code>cp</code>; in scikit-learn it is <code>ccp_alpha</code>. The pruned bank tree has <b>15 leaves</b>, and its validation accuracy (0.980) is slightly <em>better</em> than the full tree’s (0.979) with a third of the complexity.</p>
+<div class="predict" data-answer="c">
+  <div class="q">Trees are called “unstable”. What does that mean in practice?</div>
+  <div class="opts"><button class="opt">They crash on large datasets</button><button class="opt">Predictions change when the cutoff changes</button><button class="opt">A small change in the training data can produce a very different tree, especially near the root</button></div>
+  <div class="reveal"><p><b>C.</b> If two variables are nearly tied for the first split, a few records can flip the choice and everything below changes. High variance is the trees’ weakness, and Lecture 11 exploits it: averaging many different trees cancels it out.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="rules">
+<h2>Reading the tree: rules and importance</h2>
+<p>Every path from root to leaf is an IF–THEN rule. The top of the pruned bank tree:</p>
+<div class="output">IF Income ≤ 110.5 AND CCAvg ≤ 2.95                       → No loan   (the large majority)
+IF Income &gt; 110.5 AND Education = Undergrad AND Family ≤ 2 → No loan
+IF Income &gt; 110.5 AND Education = Undergrad AND Family ≥ 3 → Loan
+IF Income &gt; 116.5 AND Education ∈ {Graduate, Advanced}     → Loan</div>
+<p><b>Variable importance</b> adds up each variable’s impurity reductions across all its splits. Here: Education 0.38, Income 0.38, Family 0.17, CCAvg 0.05, and the rest near 0. The tree did its own variable selection.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Strengths</th><th>Weaknesses</th></tr></thead>
+<tbody><tr><td>Readable rules; no scaling needed; handles mixed types, interactions and nonlinearity; automatic variable selection; robust to outliers in X</td><td>Unstable (high variance); axis-parallel boxes approximate diagonal boundaries poorly; a single tree rarely has the best accuracy</td></tr></tbody></table></div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: a pruned tree for loan acceptance</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/UniversalBank.csv" download>UniversalBank.csv</a>.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Grow a full tree</h3>
+<pre class="code r">
+library(rpart); library(rpart.plot)
+bank <- read.csv("data/UniversalBank.csv")[, -c(1, 5)]
+bank$Personal.Loan <- factor(bank$Personal.Loan)
+set.seed(1); idx <- sample(nrow(bank), 0.6 * nrow(bank))
+train <- bank[idx, ]; valid <- bank[-idx, ]
+full <- rpart(Personal.Loan ~ ., data = train, method = "class",
+              control = rpart.control(cp = 0, minsplit = 2, minbucket = 1))
+sum(full$frame$var == "<leaf>")          # number of leaves
+</pre>
+<pre class="code py">
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, export_text, plot_tree
+bank = pd.read_csv("data/UniversalBank.csv").drop(columns=["ID", "ZIP Code"])
+X, y = bank.drop(columns="Personal Loan"), bank["Personal Loan"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1)
+full = DecisionTreeClassifier(random_state=1).fit(X_train, y_train)
+print(full.get_depth(), full.get_n_leaves(), full.score(X_train, y_train), full.score(X_valid, y_valid))
+</pre>
+<div class="see py"><b>What you should see:</b> depth 10, 43 leaves, training accuracy 1.0, validation ≈ 0.979.</div>
+<div class="see r"><b>What you should see:</b> a large tree with dozens of leaves that fits the training data perfectly.</div>
+</div>
+<div class="step" data-step="2"><h3>Prune by cross-validation</h3>
+<pre class="code r">
+printcp(full)                          # xerror = cross-validated error for each cp
+cv_tree <- rpart(Personal.Loan ~ ., data = train, method = "class",
+                 control = rpart.control(cp = 0.00001, minsplit = 5, xval = 5))
+best_cp <- cv_tree$cptable[which.min(cv_tree$cptable[, "xerror"]), "CP"]
+pruned  <- prune(cv_tree, cp = best_cp)
+rpart.plot(pruned, extra = 104)        # class, probability, % of records
+</pre>
+<pre class="code py">
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+alphas = full.cost_complexity_pruning_path(X_train, y_train).ccp_alphas[:-1]
+grid = GridSearchCV(DecisionTreeClassifier(random_state=1), {"ccp_alpha": alphas},
+                    cv=StratifiedKFold(5, shuffle=True, random_state=1)).fit(X_train, y_train)
+pruned = grid.best_estimator_
+print(pruned.get_n_leaves(), pruned.score(X_valid, y_valid))
+print(export_text(pruned, feature_names=list(X.columns), max_depth=3))
+</pre>
+<div class="see py"><b>What you should see:</b> about 15 leaves, validation accuracy ≈ 0.98, sensitivity ≈ 0.86, much better than logistic regression’s 0.66 at cutoff 0.5.</div>
+</div>
+<div class="step" data-step="3"><h3>Importance and validation</h3>
+<pre class="code r">
+round(pruned$variable.importance / sum(pruned$variable.importance), 3)
+library(caret)
+confusionMatrix(predict(pruned, valid, type = "class"), valid$Personal.Loan, positive = "1")
+</pre>
+<pre class="code py">
+from sklearn.metrics import confusion_matrix, recall_score
+print(pd.Series(pruned.feature_importances_, index=X.columns).sort_values(ascending=False).round(3))
+pred = pruned.predict(X_valid)
+print(confusion_matrix(y_valid, pred), recall_score(y_valid, pred))
+</pre>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Reporting the full tree’s training accuracy</b> (100%) as performance.</li>
+  <li><b>Over-reading the tree’s structure.</b> It is one of many plausible trees; refit on a bootstrap sample and the top splits may change.</li>
+  <li><b>Different importance definitions:</b> R’s <code>rpart</code> includes surrogate splits; scikit-learn does not. Compare rankings, not raw numbers.</li>
+  <li><b>Coding categories as numbers in scikit-learn</b> (Education 1/2/3) lets the tree split on order. That is acceptable for ordinal variables only; otherwise use dummies.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="a"><div class="q">Gini impurity of a 50/50 box is…</div><div class="opts"><button class="opt">0.5</button><button class="opt">1</button><button class="opt">0</button><button class="opt">0.25</button></div><div class="why">1 − (0.25 + 0.25) = 0.5, the maximum for two classes.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Increasing the cost-complexity parameter (cp / α) produces…</div><div class="opts"><button class="opt">a deeper tree</button><button class="opt">the same tree with different probabilities</button><button class="opt">a smaller, more heavily pruned tree</button><button class="opt">a random forest</button></div><div class="why">Larger α penalises leaves more.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Do trees require standardised predictors?</div><div class="opts"><button class="opt">Yes, always</button><button class="opt">Only for regression trees</button><button class="opt">Only with Gini</button><button class="opt">No: splits depend only on the ordering of values</button></div><div class="why">Any monotone transformation gives the same splits.</div></div>
+  <div class="qq" data-answer="b"><div class="q">A regression tree predicts, for a new record, …</div><div class="opts"><button class="opt">the majority class of its leaf</button><button class="opt">the average Y of the training records in its leaf</button><button class="opt">a linear regression within the leaf</button><button class="opt">the overall mean of Y</button></div><div class="why">Leaf means: a step function.</div></div>
+  <div class="qq" data-answer="b"><div class="q">The main weakness that ensembles of trees fix is…</div><div class="opts"><button class="opt">trees can’t handle categorical data</button><button class="opt">high variance / instability</button><button class="opt">trees are too slow</button><button class="opt">trees need scaling</button></div><div class="why">Averaging many decorrelated trees reduces variance.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w09.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L14 · Association Rules & Collaborative Filtering · Data Mining</title>
+<meta name="description" content="Affinity analysis: support, confidence and lift; the Apriori algorithm; evaluating rules; and user- and item-based collaborative filtering for recommendations.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="14">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Association Rules & Collaborative Filtering</h1>
+  <p class="lede">“Customers who bought this also bought…” comes in two flavours. Association rules find items that go together across many transactions; collaborative filtering finds people (or items) that resemble each other and recommends accordingly. Both power the recommendation engines you use every day.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 14</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"cl","label":"Clustering (L13)","x":100,"y":50,"state":"prev","href":"L13"},
+ {"id":"m","label":"Support · confidence · lift","x":340,"y":50,"state":"today","href":"#measures"},
+ {"id":"ap","label":"Apriori","x":570,"y":50,"state":"today","href":"#apriori"},
+ {"id":"cf","label":"Collaborative filtering","x":220,"y":150,"state":"today","href":"#cf"},
+ {"id":"sim","label":"Similarity (kNN, L8)","x":440,"y":150,"state":"prev","href":"L8"},
+ {"id":"p","label":"Your project","x":640,"y":150,"state":"later","href":"../assignments.html#project"}],
+ "edges":[["cl","m","unsupervised"],["m","ap"],["cl","cf"],["sim","cf"],["ap","p"]]}'></div>
+</section>
+
+<section class="lsec" id="measures">
+<h2>Rules and the three numbers that judge them</h2>
+<p>An association rule has the form <b>IF antecedent THEN consequent</b> (A ⇒ C), where A and C are disjoint sets of items. With N transactions:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Measure</th><th>Formula</th><th>Question it answers</th></tr></thead>
+<tbody>
+<tr><td><b>Support</b></td><td>\(\frac{\#(A \cup C)}{N}\)</td><td>How often does the whole rule occur? (Is it worth caring about?)</td></tr>
+<tr><td><b>Confidence</b></td><td>\(\frac{\#(A \cup C)}{\#A} = \hat P(C \mid A)\)</td><td>When A is bought, how often is C bought too?</td></tr>
+<tr><td><b>Lift</b></td><td>\(\frac{\text{confidence}}{\#C / N} = \frac{\hat P(C\mid A)}{\hat P(C)}\)</td><td>Is C more likely with A than in general? (&gt; 1 = positive association)</td></tr>
+</tbody></table></div>
+<div class="demo">
+  <div class="dh"><b>Build a rule from 10 phone-faceplate purchases</b><span class="muted small">Faceplate.csv (textbook data)</span></div>
+  <div class="db">
+    <div id="fpTable" style="overflow-x:auto"></div>
+    <div class="two-col" style="margin-top:12px">
+      <div><b class="small">IF the basket contains…</b><div id="fpA" class="cta" style="margin-top:6px"></div></div>
+      <div><b class="small">THEN it also contains…</b><div id="fpC" class="cta" style="margin-top:6px"></div></div>
+    </div>
+    <div class="stats" id="fpStats"></div>
+    <p class="hint">Try IF {Red, White} THEN {Green}: support 0.2, confidence 0.5, lift 2.5. Green appears in only 20% of all baskets but 50% of red-and-white ones. Then try IF {White} THEN {Red}: support 0.4, but lift 0.95, which is no better than chance. Highlighted rows contain the antecedent; bold ones contain the whole rule.</p>
+  </div>
+</div>
+<div class="predict" data-answer="c">
+  <div class="q">A rule “IF bread THEN milk” has confidence 0.80. 80% of all baskets contain milk. Is this a useful rule?</div>
+  <div class="opts"><button class="opt">Yes: 80% confidence is high</button><button class="opt">Yes, if support is above 0.5</button><button class="opt">No: lift = 0.80 / 0.80 = 1, so bread tells you nothing extra about milk</button></div>
+  <div class="reveal"><p><b>C.</b> High confidence can simply reflect a popular consequent. Lift corrects for the base rate, and that is why it is the first column to sort by.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="apriori">
+<h2>Finding rules: the Apriori algorithm</h2>
+<p>With k items there are \(3^k - 2^{k+1} + 1\) possible rules: about 57,000 for just 10 items. Apriori avoids enumerating them all:</p>
+<ol>
+  <li>Choose a <b>minimum support</b>. Find all frequent single items.</li>
+  <li>Build candidate 2-itemsets only from frequent 1-itemsets, count them, keep the frequent ones; then 3-itemsets from frequent 2-itemsets, and so on. This works because <em>any subset of a frequent itemset must itself be frequent</em> (the Apriori property), so infrequent branches are pruned early.</li>
+  <li>From each frequent itemset, generate rules that meet a <b>minimum confidence</b>.</li>
+  <li>Sort by lift; inspect, de-duplicate and judge them with domain knowledge.</li>
+</ol>
+<div class="demo">
+  <div class="dh"><b>All rules for the faceplate data</b></div>
+  <div class="db">
+    <div class="controls" style="margin-top:0">
+      <label>Min support <input type="range" id="apS" min="0.1" max="0.6" step="0.1" value="0.2"><output id="apSV">0.2</output></label>
+      <label>Min confidence <input type="range" id="apC" min="0.1" max="1" step="0.1" value="0.5"><output id="apCV">0.5</output></label>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>IF</th><th>THEN</th><th class="num">Support</th><th class="num">Confidence</th><th class="num">Lift</th></tr></thead><tbody id="apRules"></tbody></table></div>
+    <p class="hint" id="apCount"></p>
+  </div>
+</div>
+<div class="callout warn"><span class="ct">Beware of rule explosions</span><p>Real retail data produce thousands of rules, many redundant (A,B ⇒ C alongside A ⇒ C) and some spurious by chance alone. Require meaningful support, look at lift, and validate surprising rules on a holdout set of transactions.</p></div>
+</section>
+
+<section class="lsec" id="cf">
+<h2>Collaborative filtering</h2>
+<p>Association rules use <em>baskets</em>; collaborative filtering (CF) uses <em>user × item</em> ratings or purchases, and makes <b>personalised</b> recommendations.</p>
+<div class="two-col">
+<div class="callout"><span class="ct">User-based CF</span><p>Find users most similar to the target user (correlation or cosine similarity over co-rated items), then recommend what they liked. This is kNN on users.</p></div>
+<div class="callout key"><span class="ct">Item-based CF</span><p>Find items similar to the ones the user already liked (based on who rated them alike). It scales better and is the approach popularised by Amazon.</p></div>
+</div>
+<div class="demo">
+  <div class="dh"><b>Predict a rating with user-based CF</b><span class="muted small">courserating.csv: 15 students × 9 courses (1–4 stars)</span></div>
+  <div class="db">
+    <div class="controls" style="margin-top:0">
+      <label>Student <select id="cfU"></select></label>
+      <label>Course to predict <select id="cfI"></select></label>
+      <label>Neighbours k <input type="range" id="cfK" min="1" max="5" value="3"><output id="cfKV">3</output></label>
+    </div>
+    <div id="cfTable" style="overflow-x:auto;margin-top:10px"></div>
+    <div class="stats" id="cfStats"></div>
+    <p class="hint">Similarity = cosine on the courses both students rated. The prediction is the similarity-weighted average of the k most similar students who rated the target course. Notice how sparse the matrix is: most cells are empty, and some students share almost no courses with anyone. This is the <b>cold-start</b> problem.</p>
+  </div>
+</div>
+<div class="predict" data-answer="a">
+  <div class="q">A brand-new student has rated nothing yet. What can user-based CF recommend?</div>
+  <div class="opts"><button class="opt">Nothing personal: there is no basis for similarity, so fall back to popular items or ask a few onboarding questions</button><button class="opt">The courses the most similar student liked</button><button class="opt">A random course, which is just as good</button></div>
+  <div class="reveal"><p><b>A.</b> That is the cold-start problem. Real systems blend CF with content-based features and popularity.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: rules and recommendations</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/Faceplate.csv" download>Faceplate.csv</a>, <a href="../data/Coursetopics.csv" download>Coursetopics.csv</a>, <a href="../data/courserating.csv" download>courserating.csv</a>.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Apriori on the faceplate data</h3>
+<pre class="code r">
+library(arules)
+fp <- read.csv("data/Faceplate.csv")
+trans <- as(as.matrix(fp[, -1]) == 1, "transactions")
+itemFrequency(trans)
+rules <- apriori(trans, parameter = list(supp = 0.2, conf = 0.5, target = "rules"))
+inspect(head(sort(rules, by = "lift"), 6))
+</pre>
+<pre class="code py">
+import pandas as pd
+from mlxtend.frequent_patterns import apriori, association_rules
+fp = pd.read_csv("data/Faceplate.csv").set_index("Transaction").astype(bool)
+print(fp.mean())                                   # item supports
+itemsets = apriori(fp, min_support=0.2, use_colnames=True)
+rules = association_rules(itemsets, metric="confidence", min_threshold=0.5)
+print(rules.sort_values("lift", ascending=False)[["antecedents", "consequents", "support", "confidence", "lift"]].head(6))
+</pre>
+<div class="see"><b>What you should see:</b> the top rules involve Green, e.g. {Green} ⇒ {Red, White} with confidence 1.0 and lift 2.5. (R’s <code>apriori</code> also lists rules with an empty antecedent, so the counts differ slightly.)</div>
+</div>
+<div class="step" data-step="2"><h3>A bigger example: which courses are taken together?</h3>
+<pre class="code r">
+ct <- read.csv("data/Coursetopics.csv")
+trans2 <- as(as.matrix(ct) == 1, "transactions")
+r2 <- apriori(trans2, parameter = list(supp = 0.01, conf = 0.5, minlen = 2))
+inspect(head(sort(r2, by = "lift"), 5))
+library(arulesViz); plot(r2, method = "graph", limit = 20)
+</pre>
+<pre class="code py">
+ct = pd.read_csv("data/Coursetopics.csv").astype(bool)
+r2 = association_rules(apriori(ct, min_support=0.01, use_colnames=True), metric="confidence", min_threshold=0.5)
+print(len(r2)); print(r2.sort_values("lift", ascending=False)[["antecedents", "consequents", "support", "confidence", "lift"]].head(5))
+</pre>
+<div class="see py"><b>What you should see:</b> 55 rules; the strongest, {DOE, Regression} ⇒ {Intro, SW}, has lift ≈ 6.6, but support of only 1.9% (7 students). Interesting, yet fragile.</div>
+</div>
+<div class="step" data-step="3"><h3>User-based collaborative filtering</h3>
+<pre class="code r">
+library(recommenderlab)
+cr <- read.csv("data/courserating.csv", row.names = 1)
+rm <- as(as.matrix(cr), "realRatingMatrix")
+rec <- Recommender(rm, method = "UBCF", parameter = list(method = "cosine", nn = 3))
+as(predict(rec, rm["EN", ], type = "ratings"), "matrix")   # predicted ratings for EN
+</pre>
+<pre class="code py">
+import numpy as np
+cr = pd.read_csv("data/courserating.csv", index_col=0)
+def cosine(u, v):
+    both = cr.loc[u].notna() & cr.loc[v].notna()
+    if both.sum() == 0: return np.nan
+    a, b = cr.loc[u, both], cr.loc[v, both]
+    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))
+def predict(user, item, k=3):
+    raters = cr.index[cr[item].notna() & (cr.index != user)]
+    sims = pd.Series({v: cosine(user, v) for v in raters}).dropna().nlargest(k)
+    return (sims * cr.loc[sims.index, item]).sum() / sims.sum(), sims.round(3).to_dict()
+print(predict("EN", "Python"))
+</pre>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Sorting by confidence alone</b>: popular consequents dominate. Sort by lift and check support.</li>
+  <li><b>Too-low support</b> produces thousands of rules driven by a handful of transactions.</li>
+  <li><b>Reading rules causally</b>: “IF diapers THEN beer” does not mean diapers cause beer purchases.</li>
+  <li><b>Ignoring sparsity and cold start</b> in CF.</li>
+  <li><b>Cosine on raw ratings</b> treats a harsh rater and a generous one as different; mean-centre ratings (or use Pearson correlation) to fix it.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="b"><div class="q">Out of 100 baskets, 20 contain A, 10 contain both A and C, and 25 contain C. The confidence of A ⇒ C is…</div><div class="opts"><button class="opt">0.10</button><button class="opt">0.50</button><button class="opt">0.40</button><button class="opt">2.0</button></div><div class="why">10 / 20 = 0.50.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Same numbers. The lift of A ⇒ C is…</div><div class="opts"><button class="opt">0.5</button><button class="opt">1.25</button><button class="opt">2.0</button><button class="opt">0.25</button></div><div class="why">0.50 / 0.25 = 2: C is twice as likely when A is present.</div></div>
+  <div class="qq" data-answer="a"><div class="q">The Apriori property says that…</div><div class="opts"><button class="opt">every subset of a frequent itemset is frequent</button><button class="opt">every superset of a frequent itemset is frequent</button><button class="opt">rules with high lift have high support</button><button class="opt">confidence is symmetric</button></div><div class="why">That’s what lets the algorithm prune.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Which method makes <em>personalised</em> recommendations from user × item ratings?</div><div class="opts"><button class="opt">Apriori</button><button class="opt">PCA</button><button class="opt">k-means on items</button><button class="opt">Collaborative filtering</button></div><div class="why">CF uses each user’s own history.</div></div>
+  <div class="qq" data-answer="b"><div class="q">A rule has lift 0.6. This means…</div><div class="opts"><button class="opt">it is a strong positive association</button><button class="opt">the antecedent makes the consequent <em>less</em> likely than usual</button><button class="opt">its support is 0.6</button><button class="opt">it will appear in 60% of baskets</button></div><div class="why">Lift &lt; 1 indicates a negative association.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w14.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

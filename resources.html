@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resources · Data Mining · Spring 2027</title>
+<meta name="description" content="Software setup, datasets and an R-to-Python cheat sheet for Data Mining, Spring 2027.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="resources" data-root="">
+<div id="site-header"></div>
+<main id="main">
+<div class="wrap">
+<header class="page-head">
+  <span class="eyebrow">Getting set up</span>
+  <h1>Resources</h1>
+  <p class="lede">Install the software once, download the datasets, and keep the R ↔ Python cheat sheet open while you work.</p>
+</header>
+
+<div class="with-side">
+<nav class="side-toc" aria-label="Resources sections">
+  <a href="#setup-r">Set up R</a>
+  <a href="#setup-py">Set up Python</a>
+  <a href="#datasets">Datasets</a>
+  <a href="#cheatsheet">R ↔ Python cheat sheet</a>
+  <a href="#reading">Further reading</a>
+</nav>
+<div class="prose">
+<h2 id="setup-r" style="margin-top:0">Set up R</h2>
+<ol>
+  <li>Install <a href="https://cran.r-project.org/" target="_blank" rel="noopener">R (≥ 4.3)</a>, then <a href="https://posit.co/download/rstudio-desktop/" target="_blank" rel="noopener">RStudio Desktop</a>.</li>
+  <li>Run this once in the RStudio console:</li>
+</ol>
+<div class="codeblock"><div class="cb-head"><span>R</span></div><pre><code>install.packages(c("tidyverse", "caret", "glmnet", "rpart", "rpart.plot",
+                   "nnet", "NeuralNetTools", "randomForest", "gbm", "pROC",
+                   "gains", "arules", "arulesViz", "recommenderlab",
+                   "rmarkdown", "knitr"))</code></pre></div>
+<p>Use an <b>RStudio Project</b> for the course and put the CSVs in a <code>data/</code> folder inside it, so that <code>read.csv("data/UniversalBank.csv")</code> works for every lecture.</p>
+
+<h2 id="setup-py">Set up Python</h2>
+<ol>
+  <li>Install <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python ≥ 3.10</a> (or Miniconda), and <a href="https://code.visualstudio.com/" target="_blank" rel="noopener">VS Code</a> with the Python and Jupyter extensions.</li>
+  <li>Create an environment and install the packages:</li>
+</ol>
+<div class="codeblock"><div class="cb-head"><span>Shell</span></div><pre><code>python -m venv dm-env
+source dm-env/bin/activate        # Windows: dm-env\Scripts\activate
+pip install pandas numpy scikit-learn matplotlib seaborn statsmodels \
+            imbalanced-learn mlxtend jupyter</code></pre></div>
+<p>The Python edition of the textbook also ships a helper package, <code>dmba</code> (<code>pip install dmba</code>), with the same datasets and plotting utilities.</p>
+
+<h2 id="datasets">Datasets</h2>
+<p>All course datasets come from the textbook (Shmueli et al., <em>Data Mining for Business Analytics</em>) and are mirrored here. Right-click → “Save link as…” or click to download.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>File</th><th>Rows</th><th>Used in</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><a href="data/WestRoxbury.csv" download>WestRoxbury.csv</a></td><td class="num">5,802</td><td>L1, HW1</td><td>Assessed home values in a Boston neighborhood</td></tr>
+<tr><td><a href="data/BostonHousing.csv" download>BostonHousing.csv</a></td><td class="num">506</td><td>L1</td><td>Median home values by census tract</td></tr>
+<tr><td><a href="data/ToyotaCorolla.csv" download>ToyotaCorolla.csv</a></td><td class="num">1,436</td><td>L2, L3, L6</td><td>Used-car prices and specifications</td></tr>
+<tr><td><a href="data/UniversalBank.csv" download>UniversalBank.csv</a></td><td class="num">5,000</td><td>L4, L5, L9, L11, L12</td><td>Did the customer accept a personal-loan offer?</td></tr>
+<tr><td><a href="data/liftExample.csv" download>liftExample.csv</a></td><td class="num">24</td><td>L5</td><td>Toy propensities for building lift charts</td></tr>
+<tr><td><a href="data/ownerExample.csv" download>ownerExample.csv</a></td><td class="num">24</td><td>L5</td><td>Toy owner/non-owner propensities for cutoff tables</td></tr>
+<tr><td><a href="data/Cereals.csv" download>Cereals.csv</a></td><td class="num">77</td><td>L7</td><td>Nutrition facts for breakfast cereals</td></tr>
+<tr><td><a href="data/RidingMowers.csv" download>RidingMowers.csv</a></td><td class="num">24</td><td>L8</td><td>Income and lot size of mower owners vs. non-owners</td></tr>
+<tr><td><a href="data/TinyData.csv" download>TinyData.csv</a></td><td class="num">6</td><td>L10</td><td>Six cheese tastings: fat, salt and like/dislike</td></tr>
+<tr><td><a href="data/accidentsnn.csv" download>accidentsnn.csv</a></td><td class="num">999</td><td>L10</td><td>Accident severity with alcohol, road and weather predictors</td></tr>
+<tr><td><a href="data/Utilities.csv" download>Utilities.csv</a></td><td class="num">22</td><td>L13</td><td>Financial profiles of U.S. public utilities</td></tr>
+<tr><td><a href="data/Universities.csv" download>Universities.csv</a></td><td class="num">1,302</td><td>L13</td><td>U.S. college statistics</td></tr>
+<tr><td><a href="data/Faceplate.csv" download>Faceplate.csv</a></td><td class="num">10</td><td>L14</td><td>Cell-phone faceplate purchases (one row per transaction)</td></tr>
+<tr><td><a href="data/Coursetopics.csv" download>Coursetopics.csv</a></td><td class="num">365</td><td>L14</td><td>Which statistics courses students took together</td></tr>
+<tr><td><a href="data/courserating.csv" download>courserating.csv</a></td><td class="num">15</td><td>L14</td><td>Student × course ratings for collaborative filtering</td></tr>
+</tbody></table></div>
+
+<h2 id="cheatsheet">R ↔ Python cheat sheet</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Task</th><th>R</th><th>Python</th></tr></thead>
+<tbody>
+<tr><td>Read a CSV</td><td><code>df &lt;- read.csv("data/x.csv")</code></td><td><code>df = pd.read_csv("data/x.csv")</code></td></tr>
+<tr><td>Look at it</td><td><code>str(df); summary(df)</code></td><td><code>df.info(); df.describe()</code></td></tr>
+<tr><td>Reproducible randomness</td><td><code>set.seed(1)</code></td><td><code>random_state=1</code></td></tr>
+<tr><td>Train/validation split</td><td><code>caret::createDataPartition(y, p = .6)</code></td><td><code>train_test_split(X, y, test_size=.4)</code></td></tr>
+<tr><td>Dummy variables</td><td><code>model.matrix(~ . , df)</code> (automatic in <code>lm</code>)</td><td><code>pd.get_dummies(df, drop_first=True)</code></td></tr>
+<tr><td>Standardize</td><td><code>preProcess(train, c("center","scale"))</code></td><td><code>StandardScaler().fit(X_train)</code></td></tr>
+<tr><td>Linear regression</td><td><code>lm(y ~ ., data = train)</code></td><td><code>LinearRegression().fit(X, y)</code></td></tr>
+<tr><td>Logistic regression</td><td><code>glm(y ~ ., family = binomial, data = train)</code></td><td><code>LogisticRegression().fit(X, y)</code></td></tr>
+<tr><td>Lasso / ridge</td><td><code>cv.glmnet(x, y, alpha = 1 / 0)</code></td><td><code>LassoCV()</code> / <code>RidgeCV()</code></td></tr>
+<tr><td>PCA</td><td><code>prcomp(X, scale. = TRUE)</code></td><td><code>PCA().fit(StandardScaler().fit_transform(X))</code></td></tr>
+<tr><td>kNN</td><td><code>train(..., method = "knn")</code></td><td><code>KNeighborsClassifier(n_neighbors=k)</code></td></tr>
+<tr><td>Tree</td><td><code>rpart(y ~ ., method = "class")</code></td><td><code>DecisionTreeClassifier(ccp_alpha=…)</code></td></tr>
+<tr><td>Neural net</td><td><code>nnet(y ~ ., size = 5, decay = .1)</code></td><td><code>MLPClassifier(hidden_layer_sizes=(5,), alpha=.1)</code></td></tr>
+<tr><td>Random forest</td><td><code>randomForest(y ~ ., ntree = 500)</code></td><td><code>RandomForestClassifier(n_estimators=500)</code></td></tr>
+<tr><td>Confusion matrix</td><td><code>confusionMatrix(pred, actual, positive = "1")</code></td><td><code>confusion_matrix(y_true, y_pred)</code></td></tr>
+<tr><td>ROC / AUC</td><td><code>pROC::roc(actual, prob)</code></td><td><code>roc_auc_score(y, prob)</code></td></tr>
+<tr><td>k-fold CV</td><td><code>trainControl(method = "cv", number = 10)</code></td><td><code>cross_val_score(model, X, y, cv=10)</code></td></tr>
+<tr><td>k-means</td><td><code>kmeans(X, centers = k, nstart = 25)</code></td><td><code>KMeans(n_clusters=k, n_init=25)</code></td></tr>
+<tr><td>Hierarchical clustering</td><td><code>hclust(dist(X), method = "ward.D2")</code></td><td><code>scipy.cluster.hierarchy.linkage(X, "ward")</code></td></tr>
+<tr><td>Association rules</td><td><code>arules::apriori(trans, parameter = …)</code></td><td><code>mlxtend.frequent_patterns.apriori</code></td></tr>
+</tbody></table></div>
+
+<h2 id="reading">Further reading</h2>
+<ul>
+  <li><span data-c="textbook.optional"></span></li>
+  <li>Kuhn, M. &amp; Johnson, K. (2013). <em>Applied Predictive Modeling</em>. Springer. Excellent on resampling and tuning.</li>
+  <li>The <a href="https://topepo.github.io/caret/" target="_blank" rel="noopener">caret book</a> and the <a href="https://scikit-learn.org/stable/user_guide.html" target="_blank" rel="noopener">scikit-learn user guide</a>.</li>
+</ul>
+</div>
+</div>
+</div>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/course-config.js"></script>
+<script src="assets/js/schedule-data.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/pages.js"></script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L11 · Ensembles: Bagging, Random Forests & Boosting · Data Mining</title>
+<meta name="description" content="Ensemble methods: why averaging reduces variance, bootstrap aggregation, random forests, out-of-bag error, boosting and gradient boosting, and variable importance.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="11">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Ensembles: Bagging, Random Forests & Boosting</h1>
+  <p class="lede">One tree is unstable; five hundred slightly different trees, averaged, are remarkably stable and accurate. Ensembles turn the trees’ weakness into a strength, and they are the method to beat on most tabular prediction problems.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 13</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"t","label":"Trees: high variance (L9)","x":120,"y":50,"state":"prev","href":"L9"},
+ {"id":"w","label":"Wisdom of crowds","x":340,"y":50,"state":"today","href":"#why"},
+ {"id":"bag","label":"Bagging","x":200,"y":150,"state":"today","href":"#bagging"},
+ {"id":"rf","label":"Random forest","x":390,"y":150,"state":"today","href":"#rf"},
+ {"id":"bo","label":"Boosting","x":570,"y":50,"state":"today","href":"#boost"},
+ {"id":"vi","label":"Variable importance","x":590,"y":150,"state":"today","href":"#rf"},
+ {"id":"re","label":"Rare events (L12)","x":650,"y":210,"state":"later","href":"L12"}],
+ "edges":[["t","w"],["w","bag","reduce variance"],["bag","rf","+ random features"],["w","bo","reduce bias"],["rf","vi"],["vi","re"]]}'></div>
+</section>
+
+<section class="lsec" id="why">
+<h2>Why combining models works</h2>
+<p>Average \(B\) predictions that each have variance \(\sigma^2\) and pairwise correlation \(\rho\):</p>
+<div class="formula">\[ \operatorname{Var}\Big(\tfrac{1}{B}\textstyle\sum_b \hat f_b\Big) = \rho\,\sigma^2 + \frac{1-\rho}{B}\,\sigma^2 \]</div>
+<p>As B grows, the second term vanishes, but the first does not. Averaging helps most when the models are <b>individually flexible (low bias)</b> and <b>weakly correlated</b>. Two families of ensembles exploit this differently:</p>
+<div class="two-col">
+<div class="callout"><span class="ct">Parallel: bagging &amp; random forests</span><p>Many deep, high-variance trees grown <em>independently</em> on resampled data, then averaged. Mainly reduces <b>variance</b>.</p></div>
+<div class="callout key"><span class="ct">Sequential: boosting</span><p>Many small, high-bias trees grown <em>one after another</em>, each fixing what the previous ones got wrong. Mainly reduces <b>bias</b>.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="bagging">
+<h2>Bagging = bootstrap aggregating</h2>
+<ol>
+  <li>Draw a <b>bootstrap sample</b>: n records sampled <em>with replacement</em> from the training data.</li>
+  <li>Grow a deep (unpruned) tree on it.</li>
+  <li>Repeat B times. Predict by majority vote (classification) or average (regression).</li>
+</ol>
+<div class="predict" data-answer="b">
+  <div class="q">What fraction of the original records does a typical bootstrap sample leave out?</div>
+  <div class="opts"><button class="opt">About 10%</button><button class="opt">About 37%</button><button class="opt">About 50%</button><button class="opt">None: it has n records</button></div>
+  <div class="reveal"><p><b>≈ 37%.</b> The chance a given record is never drawn in n tries is \((1 - 1/n)^n \to e^{-1} \approx 0.368\). These <b>out-of-bag (OOB)</b> records act as a free validation set for each tree: averaging their OOB predictions gives an honest error estimate without a separate partition.</p></div>
+</div>
+<div class="demo">
+  <div class="dh"><b>Watch the ensemble smooth out</b><span class="muted small">noisy 1-D regression · deep trees vs. boosted stumps</span></div>
+  <div class="db">
+    <canvas id="ensCanvas" aria-label="Bagging and boosting on a 1-D regression problem"></canvas>
+    <div class="controls">
+      <div class="seg" role="group"><button data-mode="bag" aria-pressed="true">Bagging</button><button data-mode="boost" aria-pressed="false">Boosting</button></div>
+      <label>Number of trees <input type="range" id="eB" min="1" max="200" value="1"><output id="eBV">1</output></label>
+      <label id="eLRw" style="display:none">Learning rate <select id="eLR"><option>0.05</option><option selected>0.1</option><option>0.3</option><option>1</option></select></label>
+      <button class="btn sm" id="eNew">New data</button>
+    </div>
+    <div class="stats" id="ensStats"></div>
+    <p class="hint"><b>Bagging:</b> each faint line is one deep tree on a bootstrap sample. It is jumpy and overfits. The bold line is their average: as you add trees it becomes much smoother, and test error drops, then levels off. It never rises, so more trees don’t overfit. <b>Boosting:</b> each new stump (depth-1 tree) is fitted to the current <em>residuals</em>; the fit improves step by step. With a high learning rate and many trees, test error eventually creeps back up.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="rf">
+<h2>Random forests</h2>
+<p>Bagged trees are still correlated: if Income is the best first split, nearly every tree splits on Income first. A <b>random forest</b> decorrelates them by considering only a <b>random subset of <code>mtry</code> predictors at each split</b> (default √p for classification, p/3 for regression).</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Tuning parameter</th><th>Meaning</th><th>Guidance</th></tr></thead>
+<tbody>
+<tr><td><code>ntree</code> / <code>n_estimators</code></td><td>Number of trees</td><td>More is never worse, only slower; 300–1,000</td></tr>
+<tr><td><code>mtry</code> / <code>max_features</code></td><td>Predictors tried per split</td><td>The main knob; tune by OOB or CV error</td></tr>
+<tr><td><code>nodesize</code> / <code>min_samples_leaf</code></td><td>Minimum leaf size</td><td>Default 1 (classification) is usually fine</td></tr>
+</tbody></table></div>
+<p><b>Variable importance</b> (mean decrease in impurity, or in accuracy when a variable is permuted) for the bank forest: Income 0.33, Education 0.20, CCAvg 0.17, Family 0.11, CD Account 0.06, matching the single tree’s story but more reliable, because it averages over 500 trees.</p>
+</section>
+
+<section class="lsec" id="boost">
+<h2>Boosting</h2>
+<p><b>AdaBoost</b> (classification) reweights the training records after each tree, giving misclassified ones more weight so the next tree focuses on them. <b>Gradient boosting</b> generalises the idea: each new small tree is fitted to the <em>residuals</em> (more generally, the gradient of the loss) of the current ensemble, and added with a shrinkage factor (the learning rate):</p>
+<div class="formula">\[ \hat f_m(x) = \hat f_{m-1}(x) + \eta \cdot \text{tree}_m(x), \qquad \text{tree}_m \text{ fitted to } y - \hat f_{m-1}(x) \]</div>
+<p>Boosting has more knobs (number of trees, learning rate, tree depth) and <em>can</em> overfit if run too long, so tune by CV. Modern implementations (XGBoost, LightGBM, CatBoost) win many tabular-data competitions.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Model (Universal Bank, same split)</th><th class="num">Accuracy</th><th class="num">Sensitivity</th><th class="num">AUC</th></tr></thead>
+<tbody>
+<tr><td>Single tree (unpruned)</td><td class="num">0.979</td><td class="num">0.870</td><td class="num">0.931</td></tr>
+<tr><td>Bagged trees (500)</td><td class="num">0.984</td><td class="num">0.876</td><td class="num">0.997</td></tr>
+<tr><td>Random forest (500)</td><td class="num">0.982</td><td class="num">0.834</td><td class="num">0.997</td></tr>
+<tr><td>Gradient boosting (300, η = 0.1, depth 3)</td><td class="num"><b>0.985</b></td><td class="num"><b>0.881</b></td><td class="num">0.997</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="a">
+  <div class="q">The single tree’s AUC is 0.93 while every ensemble’s is 0.997, yet their accuracies differ by less than one point. Why the large AUC gap?</div>
+  <div class="opts"><button class="opt">A deep tree outputs only a few distinct probabilities (mostly 0 or 1), so it ranks customers poorly; ensembles average many votes and produce smooth, well-ordered probabilities</button><button class="opt">AUC is computed on the training data</button><button class="opt">The tree is biased toward class 0</button></div>
+  <div class="reveal"><p><b>A.</b> Ensembles shine for <em>ranking</em> (lift, targeting), not just for classification at one cutoff.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: forests and boosting for loan acceptance</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/UniversalBank.csv" download>UniversalBank.csv</a>.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Random forest with OOB error</h3>
+<pre class="code r">
+library(randomForest)
+bank <- read.csv("data/UniversalBank.csv")[, -c(1, 5)]
+bank$Personal.Loan <- factor(bank$Personal.Loan)
+set.seed(1); idx <- sample(nrow(bank), 0.6 * nrow(bank))
+train <- bank[idx, ]; valid <- bank[-idx, ]
+rf <- randomForest(Personal.Loan ~ ., data = train, ntree = 500, mtry = 3, importance = TRUE)
+rf                                   # OOB error estimate + confusion matrix
+plot(rf)                             # error vs. number of trees: flattens out
+varImpPlot(rf, type = 1)             # mean decrease in accuracy
+</pre>
+<pre class="code py">
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score
+bank = pd.read_csv("data/UniversalBank.csv").drop(columns=["ID", "ZIP Code"])
+X, y = bank.drop(columns="Personal Loan"), bank["Personal Loan"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1)
+rf = RandomForestClassifier(n_estimators=500, oob_score=True, random_state=1).fit(X_train, y_train)
+print("OOB accuracy:", rf.oob_score_)
+print(pd.Series(rf.feature_importances_, index=X.columns).sort_values(ascending=False).round(3))
+</pre>
+<div class="see"><b>What you should see:</b> OOB accuracy ≈ 0.99, close to what the validation set will show. Income, Education, CCAvg and Family lead the importance ranking.</div>
+</div>
+<div class="step" data-step="2"><h3>Gradient boosting</h3>
+<pre class="code r">
+library(gbm)
+train$y <- as.numeric(as.character(train$Personal.Loan))       # gbm wants 0/1 numeric
+boost <- gbm(y ~ . - Personal.Loan, data = train, distribution = "bernoulli",
+             n.trees = 1000, interaction.depth = 3, shrinkage = 0.1, cv.folds = 5)
+best <- gbm.perf(boost, method = "cv")                           # optimal number of trees
+prob_gb <- predict(boost, valid, n.trees = best, type = "response")
+summary(boost, n.trees = best)                                   # relative influence
+</pre>
+<pre class="code py">
+gb = GradientBoostingClassifier(n_estimators=300, learning_rate=0.1, max_depth=3,
+                                random_state=1).fit(X_train, y_train)
+for name, m in [("random forest", rf), ("boosting", gb)]:
+    p, pr = m.predict(X_valid), m.predict_proba(X_valid)[:, 1]
+    print(name, accuracy_score(y_valid, p), recall_score(y_valid, p), roc_auc_score(y_valid, pr))
+</pre>
+<div class="see"><b>What you should see:</b> both ensembles reach accuracy ≈ 0.98–0.985 and AUC ≈ 0.997, the best results of the course so far on this data.</div>
+</div>
+<div class="step" data-step="3"><h3>Tune mtry (random forest) by CV</h3>
+<pre class="code r">
+library(caret)
+rf_cv <- train(Personal.Loan ~ ., data = train[, names(train) != "y"], method = "rf", ntree = 300,
+               tuneGrid = data.frame(mtry = c(2, 3, 5, 8, 11)),
+               trControl = trainControl(method = "cv", number = 5))
+rf_cv$bestTune
+</pre>
+<pre class="code py">
+from sklearn.model_selection import GridSearchCV
+g = GridSearchCV(RandomForestClassifier(n_estimators=300, random_state=1),
+                 {"max_features": [2, 3, 5, 8, 11]}, cv=5).fit(X_train, y_train)
+print(g.best_params_, g.best_score_)
+</pre>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Boosting for too many rounds</b> with a high learning rate: tune the number of trees by CV or early stopping.</li>
+  <li><b>Reading impurity importance as causal</b>, or trusting it blindly: it favours continuous variables with many split points. Permutation importance is more reliable.</li>
+  <li><b>Forgetting the cost:</b> 500 trees means 500× the scoring time and no single readable rule set.</li>
+  <li><b>Comparing models on different splits.</b> Keep the partition fixed (or use the same CV folds) when building a comparison table like the one above.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="b"><div class="q">A random forest differs from bagged trees by…</div><div class="opts"><button class="opt">using pruned trees</button><button class="opt">considering a random subset of predictors at each split</button><button class="opt">fitting trees to residuals</button><button class="opt">using fewer trees</button></div><div class="why">Random feature subsets decorrelate the trees.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Out-of-bag error is computed using…</div><div class="opts"><button class="opt">the test set</button><button class="opt">the training records each tree was fitted on</button><button class="opt">for each record, only the trees whose bootstrap sample did not include it</button><button class="opt">cross-validation folds</button></div><div class="why">Each record is out-of-bag for about 37% of the trees.</div></div>
+  <div class="qq" data-answer="a"><div class="q">Boosting primarily reduces…</div><div class="opts"><button class="opt">bias, by sequentially correcting errors of simple models</button><button class="opt">variance, by averaging independent deep trees</button><button class="opt">the number of predictors</button><button class="opt">training time</button></div><div class="why">Small trees are biased; boosting stacks corrections.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Increasing the number of trees in a random forest…</div><div class="opts"><button class="opt">eventually causes overfitting</button><button class="opt">always lowers bias</button><button class="opt">removes the need for mtry</button><button class="opt">stabilises the error, which levels off; it doesn’t overfit</button></div><div class="why">More trees just reduce the Monte-Carlo noise of the average.</div></div>
+  <div class="qq" data-answer="b"><div class="q">The learning rate in gradient boosting…</div><div class="opts"><button class="opt">sets the tree depth</button><button class="opt">scales each tree’s contribution; smaller values need more trees but generalise better</button><button class="opt">is the bootstrap sample size</button><button class="opt">is only used in random forests</button></div><div class="why">Shrinkage slows learning to avoid overfitting.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w11.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

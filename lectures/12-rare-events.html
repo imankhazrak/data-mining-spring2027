@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L12 · Rare Events & Imbalanced Data · Data Mining</title>
+<meta name="description" content="Classification when the class of interest is rare: the accuracy paradox, oversampling and undersampling, SMOTE, adjusting probabilities, misclassification costs and cost-optimal cutoffs.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="12">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Rare Events & Imbalanced Data</h1>
+  <p class="lede">Fraud, disease, churn, loan acceptance: the cases we care about are usually the rare ones. A model can be 99% accurate and catch none of them. Today we change both how we train and how we judge, so the rare class gets the attention it deserves.</p>
+  <div class="lec-meta"><span class="pill">~70 min</span><span class="pill">Textbook ch. 5.5, 5.6</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"ev","label":"Classifier metrics (L5)","x":115,"y":50,"state":"prev","href":"L5"},
+ {"id":"tr","label":"The accuracy trap","x":330,"y":50,"state":"today","href":"#trap"},
+ {"id":"c","label":"Costs & cutoffs","x":530,"y":50,"state":"today","href":"#costs"},
+ {"id":"s","label":"Over/under-sampling","x":250,"y":150,"state":"today","href":"#sampling"},
+ {"id":"a","label":"Adjust probabilities","x":460,"y":150,"state":"today","href":"#sampling"},
+ {"id":"e","label":"Ensembles (L11)","x":650,"y":150,"state":"prev","href":"L11"},
+ {"id":"cl","label":"Clustering (L13)","x":650,"y":210,"state":"later","href":"L13"}],
+ "edges":[["ev","tr"],["tr","c"],["tr","s"],["s","a"],["c","e","any scored model"],["a","cl"]]}'></div>
+</section>
+
+<section class="lsec" id="trap">
+<h2>The accuracy trap</h2>
+<p>When only a small share \(\pi\) of records are positive, the naive rule “predict negative for everyone” scores accuracy \(1 - \pi\) with sensitivity 0:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Setting</th><th class="num">Positive rate</th><th class="num">Naive accuracy</th></tr></thead>
+<tbody>
+<tr><td>Personal-loan acceptance (Universal Bank)</td><td class="num">9.6%</td><td class="num">90.4%</td></tr>
+<tr><td>Credit-card fraud (typical)</td><td class="num">0.2%</td><td class="num">99.8%</td></tr>
+<tr><td>Rare disease screening</td><td class="num">0.05%</td><td class="num">99.95%</td></tr>
+</tbody></table></div>
+<p>Worse, standard algorithms trained to maximise accuracy or likelihood <em>learn</em> to lean toward the majority class, because that is what pays. Three remedies, often combined:</p>
+<ol>
+  <li><b>Judge correctly:</b> sensitivity, precision, lift, AUC and, best of all, <b>expected cost</b>.</li>
+  <li><b>Decide correctly:</b> move the cutoff to reflect the costs.</li>
+  <li><b>Train differently:</b> rebalance the training data, or weight the classes.</li>
+</ol>
+</section>
+
+<section class="lsec" id="costs">
+<h2>Costs and the cost-optimal cutoff</h2>
+<p>Attach a cost to each kind of error: \(C_{FN}\) for missing a positive and \(C_{FP}\) for a false alarm. If a model outputs a well-calibrated probability \(p\), classifying a record as positive is worthwhile exactly when the expected cost of saying “no” exceeds the expected cost of saying “yes”:</p>
+<div class="formula">\[ p \cdot C_{FN} \;>\; (1-p)\cdot C_{FP} \quad\Longleftrightarrow\quad p \;>\; c^* = \frac{C_{FP}}{C_{FP} + C_{FN}} \]</div>
+<div class="predict" data-answer="b">
+  <div class="q">Missing a likely loan acceptor costs the bank about 10× as much as mailing an offer to someone who declines. What is the theoretical cost-optimal cutoff?</div>
+  <div class="opts"><button class="opt">0.5</button><button class="opt">1/11 ≈ 0.09</button><button class="opt">0.10 × 0.5 = 0.05</button><button class="opt">10/11 ≈ 0.91</button></div>
+  <div class="reveal"><p><b>≈ 0.09.</b> On the bank validation set, the empirically best cutoff for these costs is <b>0.10</b>: total cost 419 vs. 665 at cutoff 0.5 and 1,920 for the naive rule. Sensitivity rises from 0.66 to 0.88.</p></div>
+</div>
+<div class="demo">
+  <div class="dh"><b>Base rate, costs and cutoff</b><span class="muted small">simulated scores from a decent classifier</span></div>
+  <div class="db">
+    <canvas id="rareCanvas" aria-label="Expected cost and accuracy versus cutoff"></canvas>
+    <div class="legend" style="margin-top:8px"><span><i style="background:var(--c1)"></i>expected cost (left axis)</span><span><i style="background:var(--c2)"></i>accuracy (right axis)</span><span><i style="background:var(--c3)"></i>sensitivity (right axis, dashed)</span><span><i style="background:var(--c4)"></i>theoretical c* (dashed)</span><span><i style="background:var(--ok)"></i>minimum-cost cutoff</span></div>
+    <div class="controls">
+      <label>Positive rate <input type="range" id="rPi" min="0" max="5" step="1" value="2"><output id="rPiV"></output></label>
+      <label><span>Cost of a miss (C<sub>FN</sub>)</span> <input type="range" id="rFN" min="1" max="50" value="10"><output id="rFNV"></output></label>
+      <label><span>Cost of a false alarm (C<sub>FP</sub>)</span> <input type="range" id="rFP" min="1" max="10" value="1"><output id="rFPV"></output></label>
+      <label>Cutoff <input type="range" id="rCut" min="0.01" max="0.99" step="0.01" value="0.5"><output id="rCutV"></output></label>
+    </div>
+    <div class="stats" id="rareStats"></div>
+    <p class="hint">Set the positive rate to 0.5%: accuracy at the default cutoff looks superb while sensitivity collapses. Then move the cutoff to the green marker (the minimum-cost cutoff) and compare it with the theoretical C<sub>FP</sub>/(C<sub>FP</sub> + C<sub>FN</sub>), shown as a dashed line.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="sampling">
+<h2>Rebalancing the training data</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Technique</th><th>How</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td><b>Undersampling</b></td><td>Keep all positives; randomly drop negatives until balanced</td><td>Fast; throws information away</td></tr>
+<tr><td><b>Oversampling</b></td><td>Duplicate positives (sample with replacement) until balanced</td><td>Keeps all data; duplicates can encourage overfitting</td></tr>
+<tr><td><b>SMOTE</b></td><td>Create <em>synthetic</em> positives by interpolating between a positive and its nearest positive neighbours</td><td>Smoother than duplication; can blur the class boundary</td></tr>
+<tr><td><b>Class weights</b></td><td>Keep the data; weight each positive more heavily in the loss</td><td>No resampling noise; supported by most libraries</td></tr>
+</tbody></table></div>
+<div class="callout warn"><span class="ct">Two rules that must not be broken</span>
+<ol style="margin:0;padding-left:1.2em">
+<li>Rebalance the <b>training</b> set only. Validation and test sets must keep the real-world class mix, or every metric is distorted.</li>
+<li>A model trained on balanced data <b>overstates</b> probabilities: it believes positives are 50% common. Either re-adjust the probabilities to the true base rate or, more simply, choose the cutoff on the (unbalanced) validation set.</li>
+</ol></div>
+<p>Results on Universal Bank (logistic regression, cutoff 0.5, same validation set):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Training data</th><th class="num">Training size</th><th class="num">Accuracy</th><th class="num">Sensitivity</th><th class="num">Precision</th></tr></thead>
+<tbody>
+<tr><td>Original (9.6% positive)</td><td class="num">3,000</td><td class="num">0.960</td><td class="num">0.661</td><td class="num">0.894</td></tr>
+<tr><td>Random oversampling to 50%</td><td class="num">5,424</td><td class="num">0.902</td><td class="num">0.865</td><td class="num">0.496</td></tr>
+<tr><td>Random undersampling to 50%</td><td class="num">576</td><td class="num">0.894</td><td class="num">0.859</td><td class="num">0.473</td></tr>
+<tr><td>SMOTE to 50%</td><td class="num">5,424</td><td class="num">0.874</td><td class="num">0.807</td><td class="num">0.419</td></tr>
+<tr><td>Original data, <b>cost-based cutoff 0.10</b></td><td class="num">3,000</td><td class="num">0.899</td><td class="num"><b>0.875</b></td><td class="num">0.484</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="c">
+  <div class="q">Oversampling and simply lowering the cutoff gave almost identical sensitivity and precision here. Why?</div>
+  <div class="opts"><button class="opt">Coincidence</button><button class="opt">Oversampling changes which variables matter</button><button class="opt">For a model like logistic regression, rebalancing mainly shifts the intercept, which moves every probability, so it is roughly equivalent to moving the cutoff</button></div>
+  <div class="reveal"><p><b>C.</b> For many models, rebalancing and re-thresholding are two routes to a similar decision. Resampling matters more for algorithms that otherwise ignore the minority class during fitting, such as trees with minimum leaf sizes or kNN, and with extreme imbalance.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: rebalance and re-threshold</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/UniversalBank.csv" download>UniversalBank.csv</a>, prepared as in Lecture 8 (stratified 60/40 split).</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Resample the training set only</h3>
+<pre class="code r">
+library(caret)
+bank <- read.csv("data/UniversalBank.csv")[, -c(1, 5)]
+bank$Education <- factor(bank$Education, labels = c("Undergrad", "Graduate", "Advanced"))
+bank$Personal.Loan <- factor(bank$Personal.Loan, labels = c("No", "Yes"))
+set.seed(1); idx <- createDataPartition(bank$Personal.Loan, p = 0.6, list = FALSE)
+train <- bank[idx, ]; valid <- bank[-idx, ]
+x <- train[, names(train) != "Personal.Loan"]
+up   <- upSample(x, train$Personal.Loan, yname = "Personal.Loan")     # oversample
+down <- downSample(x, train$Personal.Loan, yname = "Personal.Loan")   # undersample
+table(up$Personal.Loan); table(down$Personal.Loan)
+# SMOTE: library(themis) recipes::step_smote(), or library(smotefamily)
+</pre>
+<pre class="code py">
+import pandas as pd, numpy as np
+from sklearn.model_selection import train_test_split
+from imblearn.over_sampling import RandomOverSampler, SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+bank = pd.read_csv("data/UniversalBank.csv").drop(columns=["ID", "ZIP Code"])
+bank["Education"] = pd.Categorical(bank["Education"].map({1: "Undergrad", 2: "Graduate", 3: "Advanced"}),
+                                   categories=["Undergrad", "Graduate", "Advanced"])
+X = pd.get_dummies(bank.drop(columns="Personal Loan"), drop_first=True, dtype=int); y = bank["Personal Loan"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1, stratify=y)
+X_up, y_up = RandomOverSampler(random_state=1).fit_resample(X_train, y_train)
+X_dn, y_dn = RandomUnderSampler(random_state=1).fit_resample(X_train, y_train)
+X_sm, y_sm = SMOTE(random_state=1).fit_resample(X_train, y_train)
+print(y_up.value_counts(), y_dn.value_counts())
+</pre>
+</div>
+<div class="step" data-step="2"><h3>Fit, and evaluate on the untouched validation set</h3>
+<pre class="code r">
+fit_orig <- glm(Personal.Loan ~ ., data = train, family = binomial)
+fit_up   <- glm(Personal.Loan ~ ., data = up,    family = binomial)
+for (f in list(fit_orig, fit_up)) {
+  p <- predict(f, valid, type = "response")
+  pred <- factor(ifelse(p >= 0.5, "Yes", "No"), levels = c("No", "Yes"))
+  print(confusionMatrix(pred, valid$Personal.Loan, positive = "Yes")$byClass[c("Sensitivity", "Precision")])
+}
+</pre>
+<pre class="code py">
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import recall_score, precision_score
+for name, (Xs, ys) in {"original": (X_train, y_train), "over": (X_up, y_up),
+                       "under": (X_dn, y_dn), "smote": (X_sm, y_sm)}.items():
+    m = make_pipeline(StandardScaler(), LogisticRegression(max_iter=5000)).fit(Xs, ys)
+    p = m.predict(X_valid)
+    print(f"{name:9s} sens={recall_score(y_valid, p):.3f}  prec={precision_score(y_valid, p):.3f}")
+</pre>
+</div>
+<div class="step" data-step="3"><h3>Pick the cutoff that minimises cost</h3>
+<pre class="code r">
+p <- predict(fit_orig, valid, type = "response")
+actual <- valid$Personal.Loan == "Yes"
+cost <- function(cut, cfn = 10, cfp = 1) {
+  pred <- p >= cut
+  cfn * sum(!pred & actual) + cfp * sum(pred & !actual)
+}
+cuts <- seq(0.01, 0.99, by = 0.01)
+costs <- sapply(cuts, cost)
+cuts[which.min(costs)]; min(costs)
+plot(cuts, costs, type = "l"); abline(v = 1 / 11, lty = 2)
+</pre>
+<pre class="code py">
+from sklearn.metrics import confusion_matrix
+m = make_pipeline(StandardScaler(), LogisticRegression(max_iter=5000)).fit(X_train, y_train)
+prob = m.predict_proba(X_valid)[:, 1]
+def cost(cut, cfn=10, cfp=1):
+    tn, fp, fn, tp = confusion_matrix(y_valid, (prob >= cut).astype(int)).ravel()
+    return cfn * fn + cfp * fp
+cuts = np.arange(0.01, 1.0, 0.01); costs = [cost(c) for c in cuts]
+print("best cutoff:", cuts[int(np.argmin(costs))], " cost:", min(costs), " theory:", 1 / 11)
+</pre>
+<div class="see"><b>What you should see:</b> a best cutoff near 0.10 (theory 0.091), cutting total cost by about a third compared with 0.5.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Resampling before splitting:</b> duplicated positives land in both training and validation sets. That is leakage and wildly optimistic results.</li>
+  <li><b>Validating on balanced data:</b> precision and accuracy no longer reflect reality.</li>
+  <li><b>Reporting probabilities from a balanced model</b> as real-world risk without adjustment.</li>
+  <li><b>Inventing costs to hit a target.</b> Get cost estimates from the domain, and show how the decision changes across a plausible range.</li>
+  <li><b>SMOTE on dummy variables:</b> interpolation creates impossible values like 0.37 of a CD account. Use SMOTE-NC for mixed data.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="d"><div class="q">With 1% fraud, a model that flags nothing has accuracy…</div><div class="opts"><button class="opt">1%</button><button class="opt">50%</button><button class="opt">0%</button><button class="opt">99%</button></div><div class="why">The accuracy trap.</div></div>
+  <div class="qq" data-answer="a"><div class="q">If C<sub>FN</sub> = 4 and C<sub>FP</sub> = 1, the cost-optimal cutoff for calibrated probabilities is…</div><div class="opts"><button class="opt">0.2</button><button class="opt">0.25</button><button class="opt">0.8</button><button class="opt">0.5</button></div><div class="why">1 / (1 + 4) = 0.2.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Which partition(s) should be oversampled?</div><div class="opts"><button class="opt">All of them</button><button class="opt">Validation and test</button><button class="opt">Training only</button><button class="opt">Test only</button></div><div class="why">Evaluation data must reflect the real class mix.</div></div>
+  <div class="qq" data-answer="b"><div class="q">SMOTE creates new minority records by…</div><div class="opts"><button class="opt">duplicating existing ones exactly</button><button class="opt">interpolating between a minority record and its nearest minority neighbours</button><button class="opt">removing majority records</button><button class="opt">flipping labels of borderline majority records</button></div><div class="why">Synthetic points along line segments between neighbours.</div></div>
+  <div class="qq" data-answer="b"><div class="q">After training on 50/50 balanced data, the model’s average predicted probability on real data will be…</div><div class="opts"><button class="opt">about equal to the true base rate</button><button class="opt">too high: it overstates the chance of the rare class</button><button class="opt">too low</button><button class="opt">exactly 0.5</button></div><div class="why">On the bank data, mean predicted probability rose from 0.095 to 0.20 after oversampling.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w12.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

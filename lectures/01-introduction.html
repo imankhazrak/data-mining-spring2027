@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L01 · Introduction & Data Exploration · Data Mining</title>
+<meta name="description" content="What data mining is, supervised vs. unsupervised learning, the data-mining process, data types and visual exploration with the West Roxbury housing data.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="1">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Introduction & Data Exploration</h1>
+  <p class="lede">Before any model, there is a question and a dataset. Today we set up the vocabulary for the whole course, walk through the data-mining process from end to end, and learn to look at data closely enough to catch the problems that would otherwise sink a model.</p>
+  <div class="lec-meta"><span class="pill">~70 min</span><span class="pill">Textbook ch. 1–4</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<p>This is the whole course on one page. Today’s nodes are highlighted; every other node is a lecture you will meet later. Click one to jump there.</p>
+<div class="cmap" data-map='{"w":760,"h":290,"nodes":[
+ {"id":"q","label":"Business question","x":95,"y":50,"state":"today","href":"#what"},
+ {"id":"d","label":"Data & types","x":290,"y":50,"state":"today","href":"#types"},
+ {"id":"e","label":"Explore & visualize","x":500,"y":50,"state":"today","href":"#explore"},
+ {"id":"p","label":"Partition (L3)","x":690,"y":50,"state":"later","href":"L3"},
+ {"id":"s","label":"Supervised: predict Y","x":380,"y":155,"state":"today","href":"#sup"},
+ {"id":"r","label":"Regression (L2, L6)","x":130,"y":245,"state":"later","href":"L2"},
+ {"id":"c","label":"Classification (L4, L8–L12)","x":385,"y":245,"state":"later","href":"L4"},
+ {"id":"u","label":"Unsupervised (L13–14)","x":600,"y":245,"state":"later","href":"L13"},
+ {"id":"v","label":"Evaluate (L3, L5)","x":690,"y":155,"state":"later","href":"L5"}],
+ "edges":[["q","d"],["d","e"],["e","p"],["e","s"],["s","r","numeric Y"],["s","c","categorical Y"],["e","u","no Y"],["p","v"]]}'></div>
+</section>
+
+<section class="lsec" id="what">
+<h2>What is data mining?</h2>
+<p><b>Data mining</b> is the set of tools, methods and theory for revealing patterns in data, and especially for using those patterns to make predictions about new cases. Most questions you will meet fall into one of five families:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Question type</th><th>Example</th><th>Typical methods</th></tr></thead>
+<tbody>
+<tr><td><b>Predict a number</b></td><td>How much will this customer spend next month?</td><td>Linear regression, kNN, trees, neural nets</td></tr>
+<tr><td><b>Predict a category</b></td><td>Will this customer accept a loan offer: yes or no?</td><td>Logistic regression, kNN, trees, ensembles</td></tr>
+<tr><td><b>Find groups</b></td><td>What customer segments exist?</td><td>Hierarchical clustering, k-means</td></tr>
+<tr><td><b>What goes with what</b></td><td>People who buy X also buy …?</td><td>Association rules, collaborative filtering</td></tr>
+<tr><td><b>Spot the unusual</b></td><td>Is this credit-card transaction fraud?</td><td>Rare-event classification, anomaly detection</td></tr>
+</tbody></table></div>
+<p>Data mining overlaps with statistics and machine learning. The difference is mostly in emphasis. Classical statistics often asks <em>“what is the effect of X on Y, and how sure are we?”</em> (explanation and inference). Data mining asks <em>“how well can we predict Y for a record we have not seen yet?”</em> (prediction). That shift changes how we judge a model: by its performance on <b>new</b> data, not by p-values on the data used to fit it.</p>
+<div class="predict" data-answer="c">
+  <div class="q">A model fits its training data almost perfectly (R² = 0.99). What is the most important thing you still don’t know?</div>
+  <div class="opts">
+    <button class="opt">Whether the coefficients are statistically significant</button>
+    <button class="opt">Whether the residuals are normally distributed</button>
+    <button class="opt">How well it predicts records it was not trained on</button>
+    <button class="opt">Whether R² should be adjusted for the number of predictors</button>
+  </div>
+  <div class="reveal"><p><b>C.</b> A near-perfect fit on training data is as consistent with <em>memorising noise</em> as with learning a real pattern. The only honest test of a predictive model is data it never saw. Lecture 3 builds this into every analysis with partitioning and cross-validation.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="sup">
+<h2>Supervised vs. unsupervised; regression vs. classification</h2>
+<p>Every dataset in this course has <b>n records</b> (rows) and <b>p variables</b> (columns). Two questions sort every method:</p>
+<div class="two-col">
+<div class="callout"><span class="ct">1 · Is there an outcome Y?</span><p><b>Supervised</b> learning: yes. We have labelled examples and want to predict Y from predictors X₁…X<sub>p</sub>.<br><b>Unsupervised</b> learning: no. We look for structure (groups, associations) in X alone.</p></div>
+<div class="callout key"><span class="ct">2 · If yes, what kind of Y?</span><p><b>Regression</b> (prediction): Y is numeric, such as price, sales or blood pressure.<br><b>Classification</b>: Y is categorical, such as buy/not buy, benign/malignant or one of several classes.</p></div>
+</div>
+<p>Terminology varies by field, so learn the synonyms. Predictors are also called <em>features, inputs, independent variables, attributes</em> or <em>X</em>. The outcome is also called the <em>response, target, label, dependent variable</em> or <em>Y</em>. A row is a <em>record, observation, case</em> or <em>instance</em>.</p>
+
+<div class="demo" id="sortDemo">
+  <div class="dh"><b>Sort the task</b><span class="muted small" id="sortScore"></span></div>
+  <div class="db">
+    <p style="margin-top:0" id="sortQ"></p>
+    <div class="opts" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))" id="sortOpts">
+      <button class="opt" data-k="reg">Supervised · regression</button>
+      <button class="opt" data-k="cls">Supervised · classification</button>
+      <button class="opt" data-k="clu">Unsupervised · clustering</button>
+      <button class="opt" data-k="aff">Unsupervised · association</button>
+    </div>
+    <p class="hint" id="sortWhy"></p>
+    <div class="controls"><button class="btn sm" id="sortNext">Next task →</button></div>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="process">
+<h2>The data-mining process</h2>
+<p>Whatever the method, a project moves through the same steps. Most of the work, and most of the mistakes, happen <em>before</em> the model is fitted.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Step</th><th>What you actually do</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>Define the purpose</b></td><td>Who will use the result, for what decision? What would “good enough” look like?</td></tr>
+<tr><td>2</td><td><b>Obtain the data</b></td><td>Pull records; for big data, sample. Ask how the data were collected and what is missing.</td></tr>
+<tr><td>3</td><td><b>Explore &amp; clean</b></td><td>Summaries and plots; fix types; find errors, outliers and missing values.</td></tr>
+<tr><td>4</td><td><b>Reduce &amp; transform</b></td><td>Create dummies, scale, combine categories, drop leaking or redundant variables (L6–L7).</td></tr>
+<tr><td>5</td><td><b>Partition</b></td><td>Split into training / validation / test <em>before</em> modelling (L3).</td></tr>
+<tr><td>6</td><td><b>Choose &amp; fit methods</b></td><td>Try several candidate models (L2, L4, L8–L11).</td></tr>
+<tr><td>7</td><td><b>Evaluate &amp; compare</b></td><td>Judge on held-out data with a metric that matches the purpose (L3, L5).</td></tr>
+<tr><td>8</td><td><b>Deploy &amp; monitor</b></td><td>Score new records; watch for drift as the world changes.</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="b">
+  <div class="q">In the West Roxbury data, <code>TAX</code> (the property tax bill) has a correlation of 1.00 with <code>TOTAL VALUE</code>. You want to predict the value of homes that are <em>about to be listed</em>. Should <code>TAX</code> be a predictor?</div>
+  <div class="opts">
+    <button class="opt">Yes: it is the single best predictor, so it must be included</button>
+    <button class="opt">No: tax is computed <em>from</em> the assessed value, so it leaks the answer and won’t be available in the way you’d need</button>
+    <button class="opt">Yes, but only after standardizing it</button>
+  </div>
+  <div class="reveal"><p><b>B.</b> This is <b>leakage</b>: a predictor that is really a re-expression of the outcome. The model would look superb in testing and be useless in practice. Step 1 (the purpose) tells you which variables are legitimately available at prediction time.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="types">
+<h2>Data types and preprocessing</h2>
+<div class="two-col">
+<div><h3>Numeric</h3><p><b>Continuous</b> (price, area) or <b>integer counts</b> (rooms). Watch scale: when predictors are measured in very different units, distance-based methods (kNN, clustering, neural nets) need <b>standardization</b>: \(z = (x - \bar x)/s\).</p></div>
+<div><h3>Categorical</h3><p><b>Nominal</b> (colour, fuel type) or <b>ordinal</b> (low/med/high). Most methods need them as <b>dummy (indicator) variables</b>: a variable with <i>k</i> levels becomes <i>k − 1</i> 0/1 columns in regression-type models.</p></div>
+</div>
+<div class="predict" data-answer="b">
+  <div class="q"><code>REMODEL</code> has three levels: <em>None</em>, <em>Old</em> and <em>Recent</em>. How many dummy variables does a linear regression need for it?</div>
+  <div class="opts"><button class="opt">1</button><button class="opt">2</button><button class="opt">3</button></div>
+  <div class="reveal"><p><b>2.</b> One level (say <em>None</em>) becomes the <b>reference</b> category, coded as zeros in both dummies. Including all three alongside an intercept gives perfect multicollinearity (the “dummy variable trap”), because the three columns always add up to 1.</p></div>
+</div>
+<h3>Missing values and outliers</h3>
+<ul>
+  <li><b>Missing</b>: delete records (if few), impute (median, mode or a model), or add a “missing” indicator. Always ask <em>why</em> values are missing.</li>
+  <li><b>Outliers</b>: some are data errors (a house “built” in year 0), others are real and important. Decide case by case, and write down what you did.</li>
+</ul>
+<div class="callout warn"><span class="ct">A real trap in this dataset</span><p>In West Roxbury, <code>REMODEL</code> uses the text <code>None</code> for “never remodelled”. R’s <code>read.csv</code> keeps it as a string, but <b>pandas silently turns “None” into a missing value</b>: 4,346 of 5,802 rows. Same file, different data! The code walk shows the fix.</p></div>
+</section>
+
+<section class="lsec" id="explore">
+<h2>Exploring with plots</h2>
+<p>Pick the chart for the question, not the other way round:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Question</th><th>Chart</th></tr></thead>
+<tbody>
+<tr><td>What does one numeric variable look like? Skew, outliers?</td><td>Histogram, boxplot</td></tr>
+<tr><td>How does a numeric variable differ across groups?</td><td>Side-by-side boxplots</td></tr>
+<tr><td>How are two numeric variables related?</td><td>Scatter plot (colour by a third variable)</td></tr>
+<tr><td>Which pairs of variables move together?</td><td>Correlation heatmap, scatter-plot matrix</td></tr>
+<tr><td>How often does each category occur?</td><td>Bar chart (not a pie)</td></tr>
+</tbody></table></div>
+
+<div class="demo">
+  <div class="dh"><b>Explore 600 West Roxbury homes</b><span class="muted small">real data · random sample</span></div>
+  <div class="db">
+    <canvas id="exCanvas" aria-label="Interactive chart of West Roxbury home values"></canvas>
+    <div class="controls">
+      <label>Chart <select id="exType"><option value="hist">Histogram of value</option><option value="box">Boxplot by REMODEL</option><option value="scatter">Value vs. living area</option></select></label>
+      <label id="binWrap">Bins <input type="range" id="exBins" min="4" max="60" value="20"><output id="exBinsV">20</output></label>
+      <label><input type="checkbox" id="exLog"> log scale</label>
+    </div>
+    <div class="stats" id="exStats"></div>
+    <p class="hint">Try 4 bins and then 60. Too few hides the shape; too many shows noise. On the scatter plot, notice how the spread of value grows with living area. That is a hint we may want a log transform in Lecture 2.</p>
+  </div>
+</div>
+<div class="predict">
+  <div class="q">The mean home value is about $393k and the median about $376k. Before looking at the histogram, what shape do you expect: symmetric, left-skewed or right-skewed?</div>
+  <div class="reveal"><p><b>Right-skewed.</b> When the mean is above the median, a long right tail of expensive homes is pulling the mean up. Switch the demo to a log scale and the distribution becomes much more symmetric, which often helps linear models.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: first look at West Roxbury</h2>
+<div class="codewalk-head"><p style="margin:0">Download <a href="../data/WestRoxbury.csv" download>WestRoxbury.csv</a> into a <code>data/</code> folder next to your script.</p><span class="lang-switch-slot"></span></div>
+
+<div class="step" data-step="1"><h3>Load and inspect</h3>
+<pre class="code r">
+library(tidyverse)
+housing <- read.csv("data/WestRoxbury.csv")
+dim(housing)              # 5802 rows, 14 columns
+names(housing)            # note the dots: TOTAL.VALUE, LOT.SQFT, ...
+str(housing)
+summary(housing)
+</pre>
+<pre class="code py">
+import pandas as pd
+housing = pd.read_csv("data/WestRoxbury.csv", keep_default_na=False)  # keep "None" as text!
+housing.columns = housing.columns.str.strip().str.replace(" ", "_")
+print(housing.shape)      # (5802, 14)
+print(housing.dtypes)
+print(housing.describe().T)
+</pre>
+<div class="see"><b>What you should see:</b> 5,802 homes and 14 variables, 13 numeric plus <code>REMODEL</code> (text). Median value ≈ 375.9 (thousands of dollars). Look at the minimum of the year-built column: <b>0</b>. That is an error to deal with.</div>
+</div>
+
+<div class="step" data-step="2"><h3>Clean names, types and an impossible value</h3>
+<pre class="code r">
+names(housing) <- gsub("\\.", "_", names(housing))       # TOTAL.VALUE -> TOTAL_VALUE
+names(housing) <- gsub("_$", "", names(housing))          # drop trailing underscores
+housing$REMODEL <- factor(housing$REMODEL, levels = c("None", "Old", "Recent"))
+table(housing$REMODEL)
+housing %>% filter(YR_BUILT < 1800)                       # 2 rows with YR_BUILT == 0
+housing <- housing %>% mutate(YR_BUILT = na_if(YR_BUILT, 0))
+</pre>
+<pre class="code py">
+housing["REMODEL"] = pd.Categorical(housing["REMODEL"], categories=["None", "Old", "Recent"])
+print(housing["REMODEL"].value_counts())
+print(housing[housing["YR_BUILT"] < 1800])                 # 2 rows with YR_BUILT == 0
+housing["YR_BUILT"] = housing["YR_BUILT"].mask(housing["YR_BUILT"] == 0)   # 0 -> NaN
+</pre>
+<div class="see"><b>What you should see:</b> None 4,346 · Recent 875 · Old 581. If your Python counts show no “None” level, you forgot <code>keep_default_na=False</code>.</div>
+</div>
+
+<div class="step" data-step="3"><h3>Dummy variables</h3>
+<pre class="code r">
+# lm() creates dummies automatically; to see them explicitly:
+head(model.matrix(~ REMODEL, data = housing))   # REMODELOld, REMODELRecent (None = reference)
+</pre>
+<pre class="code py">
+dummies = pd.get_dummies(housing["REMODEL"], prefix="REMODEL", drop_first=True)
+print(dummies.head())     # REMODEL_Old, REMODEL_Recent (None = reference)
+</pre>
+</div>
+
+<div class="step" data-step="4"><h3>Plot: distribution, groups, relationship, correlation</h3>
+<pre class="code r">
+ggplot(housing, aes(TOTAL_VALUE)) + geom_histogram(bins = 30)
+ggplot(housing, aes(REMODEL, TOTAL_VALUE)) + geom_boxplot()
+ggplot(housing, aes(LIVING_AREA, TOTAL_VALUE)) + geom_point(alpha = .3)
+round(cor(select(housing, where(is.numeric)), use = "complete.obs"), 2)
+</pre>
+<pre class="code py">
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+housing["TOTAL_VALUE"].plot.hist(bins=30, ax=ax[0], title="Total value ($000)")
+housing.boxplot(column="TOTAL_VALUE", by="REMODEL", ax=ax[1])
+housing.plot.scatter(x="LIVING_AREA", y="TOTAL_VALUE", alpha=.3, ax=ax[2])
+plt.tight_layout(); plt.show()
+print(housing.select_dtypes("number").corr().round(2))
+</pre>
+<div class="see"><b>What you should see:</b> a right-skewed histogram; recently remodelled homes with a higher median (≈ 425 vs. 387 for Old); a strong, fanning positive relationship with living area (r ≈ 0.84); and <code>TAX</code> perfectly correlated with value. That is the leakage from Section 04.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Trusting the reader.</b> Software guesses types and missing-value codes. Always check counts after loading (“None” → NaN in pandas).</li>
+  <li><b>Leaking the answer.</b> Any variable computed from, or recorded after, the outcome must go (TAX here).</li>
+  <li><b>Coding categories as numbers.</b> Codes like 1/2/3 for unordered categories make a model treat them as amounts. Use dummies.</li>
+  <li><b>Exploring the test set.</b> Decisions made after looking at all of the data leak information too. From Lecture 3 on, explore the training data only.</li>
+  <li><b>Dropping outliers by reflex.</b> A year of 0 is an error; a $1.2M house is real. Know the difference.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="b"><div class="q">A hospital wants to predict whether a patient will be readmitted within 30 days. This is…</div><div class="opts"><button class="opt">Supervised regression</button><button class="opt">Supervised classification</button><button class="opt">Unsupervised clustering</button><button class="opt">Association rules</button></div><div class="why">The outcome (readmitted: yes/no) is known for past patients and is categorical, so this is supervised classification.</div></div>
+  <div class="qq" data-answer="c"><div class="q">A variable “Region” has 5 levels. How many dummy variables enter a linear regression with an intercept?</div><div class="opts"><button class="opt">1</button><button class="opt">5</button><button class="opt">4</button><button class="opt">10</button></div><div class="why">k − 1 = 4. The omitted level is the reference category absorbed by the intercept.</div></div>
+  <div class="qq" data-answer="a"><div class="q">Which variable is most likely to cause <em>leakage</em> when predicting whether a loan will default?</div><div class="opts"><button class="opt">Number of late-payment letters sent after the loan was issued</button><button class="opt">Applicant’s income at application</button><button class="opt">Loan amount requested</button><button class="opt">Applicant’s years at current job</button></div><div class="why">Late-payment letters are only known <em>after</em> the outcome starts to unfold, so they wouldn’t be available when the decision is made.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Which chart best shows how home value differs between remodel groups?</div><div class="opts"><button class="opt">Pie chart</button><button class="opt">Scatter plot</button><button class="opt">Single histogram</button><button class="opt">Side-by-side boxplots</button></div><div class="why">Boxplots compare the centre, spread and outliers of a numeric variable across categories at a glance.</div></div>
+  <div class="qq" data-answer="b"><div class="q">The mean of a variable is much larger than its median. The distribution is most likely…</div><div class="opts"><button class="opt">Left-skewed</button><button class="opt">Right-skewed</button><button class="opt">Symmetric</button><button class="opt">Bimodal</button></div><div class="why">A long right tail pulls the mean above the median.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Why does data mining emphasise performance on new data rather than p-values?</div><div class="opts"><button class="opt">P-values are always wrong with large n</button><button class="opt">Data-mining models never have parameters</button><button class="opt">The goal is accurate prediction for future records, and in-sample fit can be inflated by overfitting</button><button class="opt">Statistical inference is not allowed in business</button></div><div class="why">Prediction is the goal, so we measure it directly on records the model did not see.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w01.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

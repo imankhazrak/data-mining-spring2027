@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L03 · Partitioning & Predictive Performance · Data Mining</title>
+<meta name="description" content="Training, validation and test sets; overfitting; RMSE, MAE and friends; k-fold cross-validation; gains charts for numeric prediction.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="3">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Partitioning & Predictive Performance</h1>
+  <p class="lede">A model that memorises its training data can look brilliant and predict terribly. Today we build the habit that protects every analysis in this course: hold data out, measure error where the model can’t cheat, and let cross-validation choose complexity.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 2.5, 5.1–5.3</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"l","label":"Linear regression (L2)","x":110,"y":50,"state":"prev","href":"L2"},
+ {"id":"p","label":"Partition","x":320,"y":50,"state":"today","href":"#why"},
+ {"id":"o","label":"Overfitting","x":520,"y":50,"state":"today","href":"#overfit"},
+ {"id":"m","label":"Error metrics","x":200,"y":150,"state":"today","href":"#metrics"},
+ {"id":"c","label":"Cross-validation","x":420,"y":150,"state":"today","href":"#cv"},
+ {"id":"k","label":"Classifier metrics (L5)","x":640,"y":150,"state":"later","href":"L5"},
+ {"id":"t","label":"Tuning k, λ, depth (L6–L11)","x":620,"y":205,"state":"later","href":"L8"}],
+ "edges":[["l","p"],["p","o"],["p","m"],["o","c"],["m","k"],["c","t"]]}'></div>
+</section>
+
+<section class="lsec" id="why">
+<h2>Why we split the data</h2>
+<p>If we judge a model on the same records used to fit it, we reward memorisation. The fix is to split <b>before</b> modelling and give each part a single job:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Partition</th><th>Typical share</th><th>Job</th><th>Touch it…</th></tr></thead>
+<tbody>
+<tr><td><b>Training</b></td><td>50–70%</td><td>Fit model parameters (coefficients, splits, weights)</td><td>As often as you like</td></tr>
+<tr><td><b>Validation</b></td><td>20–40%</td><td>Compare models and tune settings (degree, k, λ)</td><td>Many times, so it slowly becomes optimistic</td></tr>
+<tr><td><b>Test</b> (holdout)</td><td>0–20%</td><td>One final, unbiased estimate of performance for the chosen model</td><td><b>Once</b>, at the very end</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="b">
+  <div class="q">You try 40 different models and pick the one with the lowest validation RMSE. Why is that RMSE still a little optimistic?</div>
+  <div class="opts"><button class="opt">Because RMSE always underestimates error</button><button class="opt">Because you selected the winner <em>using</em> the validation set, so some of its advantage is luck on those particular records</button><button class="opt">Because the validation set is smaller than the training set</button></div>
+  <div class="reveal"><p><b>B.</b> Choosing the best of many is itself a kind of fitting. That is exactly why a separate <b>test set</b>, used once, exists.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="overfit">
+<h2>Overfitting, made visible</h2>
+<p>Below, 30 training points (●) and 30 validation points (○) come from the same smooth curve plus noise. Increase the polynomial degree: the curve hugs the training points ever more tightly. Watch what happens to error on the points it didn’t see.</p>
+<div class="demo">
+  <div class="dh"><b>Model complexity vs. error</b><span class="muted small">simulated data</span></div>
+  <div class="db">
+    <canvas id="ofCanvas" aria-label="Polynomial fit and training/validation error curves"></canvas>
+    <div class="controls">
+      <label>Polynomial degree <input type="range" id="deg" min="1" max="12" value="1"><output id="degV">1</output></label>
+      <label>Noise <input type="range" id="noise" min="0.05" max="0.6" step="0.05" value="0.3"><output id="noiseV">0.3</output></label>
+      <button class="btn sm" id="ofNew">New random split</button>
+    </div>
+    <div class="stats" id="ofStats"></div>
+    <p class="hint">Training error only goes down as degree rises. Validation error falls, bottoms out, then climbs: the classic U. The bottom of the U is the right complexity for this data. Rerun the split a few times: the best degree moves, which is why we prefer cross-validation.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="metrics">
+<h2>Measuring prediction error</h2>
+<p>With validation residuals \(e_i = y_i - \hat y_i\) for \(i = 1,\dots,n\):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Metric</th><th>Formula</th><th>Use it to…</th></tr></thead>
+<tbody>
+<tr><td><b>ME</b> (mean error)</td><td>\(\frac1n\sum e_i\)</td><td>Detect systematic over- or under-prediction (bias)</td></tr>
+<tr><td><b>MAE</b></td><td>\(\frac1n\sum |e_i|\)</td><td>Report a typical error in the original units; robust to outliers</td></tr>
+<tr><td><b>RMSE</b></td><td>\(\sqrt{\frac1n\sum e_i^2}\)</td><td>Penalise large errors heavily; the most common default</td></tr>
+<tr><td><b>MAPE</b></td><td>\(\frac{100}{n}\sum |e_i / y_i|\)</td><td>Compare across scales (%); undefined if any \(y_i = 0\)</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="c">
+  <div class="q">Two models have the same MAE (€1,000). Model A’s RMSE is €1,100 and model B’s is €2,400. What does that tell you?</div>
+  <div class="opts"><button class="opt">A and B are equally good</button><button class="opt">B is biased upward</button><button class="opt">B makes occasional very large errors; A’s errors are more uniform</button><button class="opt">B has a smaller validation set</button></div>
+  <div class="reveal"><p><b>C.</b> RMSE ≥ MAE always, and the gap grows with the variability of error sizes. A big gap signals a few large misses, which matters if a single big error is costly.</p></div>
+</div>
+<h3>Gains (lift) for numeric prediction</h3>
+<p>Sometimes we only need to <em>rank</em> records, for example which 10% of cars to prioritise. Sort validation records by predicted value and plot the cumulative <em>actual</em> value. The further the curve sits above the diagonal (random ordering), the better the ranking.</p>
+</section>
+
+<section class="lsec" id="cv">
+<h2>k-fold cross-validation</h2>
+<p>A single split wastes data and depends on luck. <b>k-fold cross-validation</b> splits the training data into k folds, fits k models (each leaving one fold out), and averages the k held-out errors.</p>
+<svg viewBox="0 0 700 175" role="img" aria-label="Diagram of 5-fold cross validation" style="width:100%;max-width:700px;display:block;margin:10px 0">
+  <g font-family="Inter, sans-serif" font-size="12">
+    <text x="0" y="14" fill="var(--muted)">Round</text>
+    <g id="cvrows"></g>
+  </g>
+</svg>
+<div class="predict" data-answer="c">
+  <div class="q">With 10-fold CV used to compare 8 values of a tuning parameter, how many models are fitted in total (before the final refit)?</div>
+  <div class="opts"><button class="opt">8</button><button class="opt">10</button><button class="opt">80</button><button class="opt">18</button></div>
+  <div class="reveal"><p><b>80.</b> Each of the 8 settings is fitted 10 times. Then the best setting is refit once on all the training data. CV costs computation, which is why k = 5 or 10 is the usual compromise.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: honest error estimates for car prices</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/ToyotaCorolla.csv" download>ToyotaCorolla.csv</a>.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Three-way split: 50 / 30 / 20</h3>
+<pre class="code r">
+car <- read.csv("data/ToyotaCorolla.csv")
+car <- car[, c("Price", "Age_08_04", "KM", "Fuel_Type", "HP", "Automatic",
+               "Doors", "Quarterly_Tax", "Weight")]
+car$Fuel_Type <- factor(car$Fuel_Type)
+set.seed(1)
+idx   <- sample(c("train", "valid", "test"), nrow(car), replace = TRUE, prob = c(.5, .3, .2))
+train <- car[idx == "train", ]; valid <- car[idx == "valid", ]; test <- car[idx == "test", ]
+sapply(list(train = train, valid = valid, test = test), nrow)
+</pre>
+<pre class="code py">
+import pandas as pd, numpy as np
+from sklearn.model_selection import train_test_split
+car = pd.read_csv("data/ToyotaCorolla.csv")
+cols = ["Age_08_04", "KM", "Fuel_Type", "HP", "Automatic", "Doors", "Quarterly_Tax", "Weight"]
+X = pd.get_dummies(car[cols], drop_first=True, dtype=int); y = car["Price"]
+X_tmp, X_test, y_tmp, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
+X_train, X_valid, y_train, y_valid = train_test_split(X_tmp, y_tmp, test_size=0.375, random_state=1)  # .375*.8 = .3
+print(len(X_train), len(X_valid), len(X_test))
+</pre>
+</div>
+<div class="step" data-step="2"><h3>Compare error on each partition</h3>
+<pre class="code r">
+fit <- lm(Price ~ ., data = train)
+metrics <- function(actual, pred) {
+  e <- actual - pred
+  c(ME = mean(e), MAE = mean(abs(e)), RMSE = sqrt(mean(e^2)), MAPE = 100 * mean(abs(e / actual)))
+}
+rbind(train = metrics(train$Price, predict(fit, train)),
+      valid = metrics(valid$Price, predict(fit, valid)))
+</pre>
+<pre class="code py">
+from sklearn.linear_model import LinearRegression
+fit = LinearRegression().fit(X_train, y_train)
+def metrics(actual, pred):
+    e = actual - pred
+    return {"ME": e.mean(), "MAE": e.abs().mean(), "RMSE": np.sqrt((e**2).mean()),
+            "MAPE": 100 * (e / actual).abs().mean()}
+print(pd.DataFrame({"train": metrics(y_train, fit.predict(X_train)),
+                    "valid": metrics(y_valid, fit.predict(X_valid))}).T.round(1))
+</pre>
+<div class="see"><b>What you should see:</b> RMSE ≈ €1,250–1,450 on both sets and MAPE around 9–10%. For a simple linear model the gap between training and validation is small: it is not flexible enough to overfit much.</div>
+</div>
+<div class="step" data-step="3"><h3>10-fold cross-validation</h3>
+<pre class="code r">
+library(caret)
+ctrl  <- trainControl(method = "cv", number = 10)
+cvfit <- train(Price ~ ., data = rbind(train, valid), method = "lm", trControl = ctrl)
+cvfit$results[, c("RMSE", "MAE", "Rsquared")]
+cvfit$resample$RMSE            # one RMSE per fold: see the spread
+</pre>
+<pre class="code py">
+from sklearn.model_selection import cross_val_score, KFold
+cv = KFold(n_splits=10, shuffle=True, random_state=1)
+scores = cross_val_score(LinearRegression(), X_tmp, y_tmp, cv=cv, scoring="neg_root_mean_squared_error")
+print(-scores.round(0), "mean RMSE:", round(-scores.mean(), 1))
+</pre>
+<div class="see"><b>What you should see:</b> fold RMSEs ranging from roughly €1,100 to €1,800 around a mean near €1,350–1,370. A single validation split could have landed anywhere in that range.</div>
+</div>
+<div class="step" data-step="4"><h3>Test once, at the end</h3>
+<pre class="code r">
+metrics(test$Price, predict(fit, test))
+</pre>
+<pre class="code py">
+print(metrics(y_test, fit.predict(X_test)))
+</pre>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Preprocessing before splitting.</b> Computing means for standardisation or imputation on <em>all</em> data leaks validation information. Fit preprocessing on training data only.</li>
+  <li><b>Peeking at the test set</b> to choose between models: then it is a second validation set.</li>
+  <li><b>No seed.</b> Set <code>set.seed()</code> / <code>random_state</code> so results are reproducible.</li>
+  <li><b>Comparing models on different splits.</b> Use the same partition (or the same CV folds) for every candidate.</li>
+  <li><b>Time-ordered data split at random.</b> For forecasting, train on the past and validate on the future.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="c"><div class="q">Which partition is used to choose between a degree-2 and a degree-5 model?</div><div class="opts"><button class="opt">Training</button><button class="opt">Test</button><button class="opt">Validation</button><button class="opt">Any of them</button></div><div class="why">Validation data are for comparing and tuning; test data are reserved for the final estimate.</div></div>
+  <div class="qq" data-answer="a"><div class="q">As model complexity increases, training error typically…</div><div class="opts"><button class="opt">decreases steadily</button><button class="opt">follows a U-shape</button><button class="opt">increases</button><button class="opt">stays flat</button></div><div class="why">More flexibility can only fit the training data better (or equally well). Validation error is the one with the U-shape.</div></div>
+  <div class="qq" data-answer="b"><div class="q">A model’s mean error (ME) on validation data is +€800. This means it…</div><div class="opts"><button class="opt">over-predicts on average</button><button class="opt">under-predicts on average</button><button class="opt">has RMSE of 800</button><button class="opt">is unbiased</button></div><div class="why">e = actual − predicted; positive ME means actual values tend to be higher than predictions.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Which metric cannot be computed when some actual values are 0?</div><div class="opts"><button class="opt">RMSE</button><button class="opt">MAE</button><button class="opt">ME</button><button class="opt">MAPE</button></div><div class="why">MAPE divides by y.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Main advantage of 10-fold CV over a single 70/30 split?</div><div class="opts"><button class="opt">It is faster</button><button class="opt">Every record is used for both fitting and validation, giving a less variable error estimate</button><button class="opt">It removes the need for a test set in every case</button><button class="opt">It prevents overfitting automatically</button></div><div class="why">Averaging over folds reduces the dependence on one lucky or unlucky split.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w03.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

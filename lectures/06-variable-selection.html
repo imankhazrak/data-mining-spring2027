@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L06 · Variable Selection & Regularization · Data Mining</title>
+<meta name="description" content="Why fewer predictors can predict better; best subset and stepwise search; ridge, lasso and elastic net; choosing lambda by cross-validation.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="6">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Variable Selection & Regularization</h1>
+  <p class="lede">More predictors are not always better: each one adds variance, cost and a chance to overfit. Today we compare two ways to keep a model lean: <em>searching</em> for a good subset of variables, and <em>shrinking</em> all coefficients toward zero with a penalty.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 6.4</span><span class="pill">ISLR ch. 6</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"l","label":"Linear regression (L2)","x":110,"y":50,"state":"prev","href":"L2"},
+ {"id":"cv","label":"Cross-validation (L3)","x":110,"y":150,"state":"prev","href":"L3"},
+ {"id":"w","label":"Why reduce?","x":320,"y":50,"state":"today","href":"#why"},
+ {"id":"s","label":"Subset & stepwise","x":520,"y":50,"state":"today","href":"#subset"},
+ {"id":"r","label":"Ridge / lasso / elastic net","x":380,"y":150,"state":"today","href":"#shrink"},
+ {"id":"lam","label":"Choose λ by CV","x":610,"y":150,"state":"today","href":"#lambda"},
+ {"id":"p","label":"PCA (L7)","x":660,"y":205,"state":"later","href":"L7"}],
+ "edges":[["l","w"],["w","s"],["w","r"],["cv","r"],["r","lam"],["lam","p"]]}'></div>
+</section>
+
+<section class="lsec" id="why">
+<h2>Why use fewer predictors?</h2>
+<ul>
+  <li><b>Variance.</b> Every estimated coefficient carries noise. Irrelevant predictors add noise to predictions without adding signal.</li>
+  <li><b>Multicollinearity.</b> Correlated predictors make coefficients unstable (remember Age vs. Experience in Lecture 4).</li>
+  <li><b>Cost and robustness.</b> Every variable must be collected, cleaned and kept available in production.</li>
+  <li><b>Interpretability.</b> A 7-variable model can be explained to a manager; a 70-variable one cannot.</li>
+</ul>
+<p>This is the <b>bias–variance trade-off</b>: dropping a weak predictor adds a little bias but can remove more variance, lowering error on new data.</p>
+<div class="formula">\[ \text{Expected prediction error} = \text{Bias}^2 + \text{Variance} + \text{irreducible noise} \]</div>
+</section>
+
+<section class="lsec" id="subset">
+<h2>Searching for a subset</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Method</th><th>How it works</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td><b>Exhaustive (best subset)</b></td><td>Fit every one of the \(2^p\) subsets; pick the best by adjusted R², AIC/BIC or CV error</td><td>Impossible beyond ~30 predictors</td></tr>
+<tr><td><b>Forward selection</b></td><td>Start empty; add the predictor that helps most; stop when nothing helps enough</td><td>About \(p^2/2\) fits</td></tr>
+<tr><td><b>Backward elimination</b></td><td>Start with all; drop the least useful one at a time</td><td>About \(p^2/2\) fits; needs n &gt; p</td></tr>
+<tr><td><b>Stepwise</b></td><td>Forward, but a variable added earlier may be dropped later</td><td>Similar</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="c">
+  <div class="q">With 19 candidate predictors, how many models does exhaustive search fit?</div>
+  <div class="opts"><button class="opt">19</button><button class="opt">190</button><button class="opt">524,288</button><button class="opt">361</button></div>
+  <div class="reveal"><p><b>2¹⁹ = 524,288.</b> Feasible on a laptop for linear models, but double the predictors and it becomes 275 billion. Greedy searches (forward/backward/stepwise) are the practical substitute, with no guarantee of finding the best subset.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="shrink">
+<h2>Shrinkage: ridge, lasso and elastic net</h2>
+<p>Instead of in-or-out decisions, <b>regularization</b> keeps all predictors but penalises large coefficients. With standardised predictors it minimises</p>
+<div class="formula">\[ \underbrace{\sum_i (y_i - \hat y_i)^2}_{\text{fit}} \;+\; \lambda \Big[\, \alpha \underbrace{\textstyle\sum_j |\beta_j|}_{\text{lasso (L1)}} + (1-\alpha)\underbrace{\textstyle\sum_j \beta_j^2}_{\text{ridge (L2)}} \Big] \]</div>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Ridge (α = 0)</th><th>Lasso (α = 1)</th><th>Elastic net (0 &lt; α &lt; 1)</th></tr></thead>
+<tbody>
+<tr><td>Coefficients shrink…</td><td>smoothly, never exactly to 0</td><td>and many hit exactly 0</td><td>both</td></tr>
+<tr><td>Variable selection?</td><td>No</td><td><b>Yes</b></td><td>Yes</td></tr>
+<tr><td>Correlated predictors</td><td>Shares weight among them</td><td>Tends to pick one arbitrarily</td><td>Keeps groups together</td></tr>
+</tbody></table></div>
+<div class="callout warn"><span class="ct">Standardise first</span><p>The penalty adds up coefficient sizes, so a predictor measured in kilometres (tiny β) and one in years (large β) would be penalised unequally. <code>glmnet</code> standardises internally; in scikit-learn put a <code>StandardScaler</code> in a pipeline.</p></div>
+<div class="demo">
+  <div class="dh"><b>Coefficient paths on the Toyota data</b><span class="muted small">19 standardised predictors · real fits</span></div>
+  <div class="db">
+    <canvas id="pathCanvas" aria-label="Regularization coefficient paths and cross-validation error"></canvas>
+    <div class="controls">
+      <label>Method <select id="pMethod"><option value="lasso">Lasso</option><option value="ridge">Ridge</option><option value="enet">Elastic net (α = 0.5)</option></select></label>
+      <label>log₁₀ λ <input type="range" id="pLam" min="0" max="49" value="20"><output id="pLamV"></output></label>
+      <button class="btn sm" id="pMin">Go to min CV</button><button class="btn sm" id="p1se">Go to 1-SE rule</button>
+    </div>
+    <div class="stats" id="pStats"></div>
+    <p class="hint">Top: each line is one coefficient as λ shrinks from left (heavy penalty) to right (almost OLS). Hover to identify a line. Bottom: 10-fold CV RMSE. With lasso, watch variables enter one at a time: the first to enter (Age, then Automatic_airco, KM and Weight) are the strongest predictors.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="lambda">
+<h2>Choosing λ</h2>
+<p>λ is a <b>tuning parameter</b>: chosen by cross-validation, never by training error (which always prefers λ = 0). Two common rules:</p>
+<ul>
+  <li><b>λ<sub>min</sub></b>: the value with the lowest mean CV error.</li>
+  <li><b>λ<sub>1se</sub></b>: the <em>largest</em> λ whose CV error is within one standard error of the minimum, giving a simpler model that is statistically just as good.</li>
+</ul>
+<p>On the Toyota data (1,436 cars, 60% training) the results are instructive:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Model</th><th class="num">Predictors used</th><th class="num">Validation RMSE (€)</th></tr></thead>
+<tbody>
+<tr><td>OLS, all predictors</td><td class="num">19</td><td class="num">1,124</td></tr>
+<tr><td>Ridge (λ by CV)</td><td class="num">19</td><td class="num">1,122</td></tr>
+<tr><td>Lasso, λ<sub>min</sub></td><td class="num">19</td><td class="num">1,120</td></tr>
+<tr><td>Lasso, λ<sub>1se</sub></td><td class="num">13</td><td class="num">1,170</td></tr>
+<tr><td>Forward selection (CV)</td><td class="num">7</td><td class="num">1,179</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="b">
+  <div class="q">Regularization barely beat OLS here. Why might that be?</div>
+  <div class="opts"><button class="opt">The lasso was implemented incorrectly</button><button class="opt">With ~860 training cars and only 19 predictors, OLS variance is already low, so there is little to gain from shrinkage</button><button class="opt">Regularization only works for classification</button></div>
+  <div class="reveal"><p><b>B.</b> Shrinkage shines when p is large relative to n or predictors are highly correlated. Here its real payoff is the <em>7- to 13-variable models</em> that predict almost as well as the 19-variable one: cheaper and easier to explain.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: lean models for car prices</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/ToyotaCorolla.csv" download>ToyotaCorolla.csv</a> (all 1,436 cars).</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Prepare, and fix a data error</h3>
+<pre class="code r">
+car <- read.csv("data/ToyotaCorolla.csv")
+car$CC[car$CC == 16000] <- 1600                 # a typo: one car listed at 16,000 cc
+vars <- c("Price", "Age_08_04", "KM", "Fuel_Type", "HP", "Met_Color", "Automatic", "CC",
+          "Doors", "Quarterly_Tax", "Weight", "Mfr_Guarantee", "Guarantee_Period", "Airco",
+          "Automatic_airco", "CD_Player", "Powered_Windows", "Sport_Model", "Tow_Bar")
+car <- car[, vars]; car$Fuel_Type <- factor(car$Fuel_Type)
+set.seed(1); idx <- sample(nrow(car), 0.6 * nrow(car))
+train <- car[idx, ]; valid <- car[-idx, ]
+rmse <- function(fit, newx = valid) sqrt(mean((valid$Price - predict(fit, newx))^2))
+</pre>
+<pre class="code py">
+import pandas as pd, numpy as np
+from sklearn.model_selection import train_test_split, KFold
+car = pd.read_csv("data/ToyotaCorolla.csv")
+car.loc[car["CC"] == 16000, "CC"] = 1600         # a typo: one car listed at 16,000 cc
+cols = ["Age_08_04", "KM", "Fuel_Type", "HP", "Met_Color", "Automatic", "CC", "Doors",
+        "Quarterly_Tax", "Weight", "Mfr_Guarantee", "Guarantee_Period", "Airco",
+        "Automatic_airco", "CD_Player", "Powered_Windows", "Sport_Model", "Tow_Bar"]
+X = pd.get_dummies(car[cols], drop_first=True, dtype=int); y = car["Price"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1)
+cv = KFold(10, shuffle=True, random_state=1)
+rmse = lambda m, Xv=X_valid: np.sqrt(((y_valid - m.predict(Xv))**2).mean())
+</pre>
+<div class="see"><b>Why the fix matters:</b> leave the 16,000 cc typo in and, depending on which partition it lands in, validation RMSE can more than double. Exploring first (Lecture 1) pays off.</div>
+</div>
+<div class="step" data-step="2"><h3>Stepwise / forward selection</h3>
+<pre class="code r">
+full <- lm(Price ~ ., data = train)
+null <- lm(Price ~ 1, data = train)
+step_fit <- step(null, scope = formula(full), direction = "both", trace = 0)  # AIC-based
+formula(step_fit); rmse(step_fit)
+</pre>
+<pre class="code py">
+from sklearn.linear_model import LinearRegression
+from sklearn.feature_selection import SequentialFeatureSelector
+sfs = SequentialFeatureSelector(LinearRegression(), n_features_to_select="auto", tol=10,
+                                direction="forward", cv=cv, scoring="neg_root_mean_squared_error")
+sfs.fit(X_train, y_train)
+sel = X.columns[sfs.get_support()]; print(list(sel))
+fwd = LinearRegression().fit(X_train[sel], y_train); print(rmse(fwd, X_valid[sel]))
+</pre>
+<div class="see"><b>What you should see:</b> Python’s forward search (stop when CV RMSE improves by &lt; €10) keeps 7 predictors: Age, KM, HP, Quarterly_Tax, Weight, Automatic_airco, Powered_Windows. R’s AIC stepwise keeps more, because AIC is a gentler stopping rule.</div>
+</div>
+<div class="step" data-step="3"><h3>Lasso and ridge with cross-validated λ</h3>
+<pre class="code r">
+library(glmnet)
+x_train <- model.matrix(Price ~ ., train)[, -1]; x_valid <- model.matrix(Price ~ ., valid)[, -1]
+cv_lasso <- cv.glmnet(x_train, train$Price, alpha = 1, nfolds = 10)
+plot(cv_lasso)                                    # CV curve with lambda.min and lambda.1se
+coef(cv_lasso, s = "lambda.1se")                  # zeros = dropped variables
+sqrt(mean((valid$Price - predict(cv_lasso, x_valid, s = "lambda.min"))^2))
+cv_ridge <- cv.glmnet(x_train, train$Price, alpha = 0)
+plot(cv_ridge$glmnet.fit, xvar = "lambda")        # ridge paths: shrink, never zero
+</pre>
+<pre class="code py">
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LassoCV, RidgeCV, Lasso
+lasso = make_pipeline(StandardScaler(), LassoCV(cv=cv, max_iter=50000)).fit(X_train, y_train)
+L = lasso[-1]; print("lambda_min:", L.alpha_, " RMSE:", rmse(lasso))
+mse, se = L.mse_path_.mean(1), L.mse_path_.std(1) / np.sqrt(10)          # 1-SE rule by hand
+a1se = L.alphas_[np.where(mse <= mse.min() + se[mse.argmin()])[0][0]]
+lasso1se = make_pipeline(StandardScaler(), Lasso(alpha=a1se, max_iter=50000)).fit(X_train, y_train)
+coefs = pd.Series(lasso1se[-1].coef_, index=X.columns); print(coefs[coefs != 0].round(0))
+ridge = make_pipeline(StandardScaler(), RidgeCV(alphas=np.logspace(-2, 4, 60))).fit(X_train, y_train)
+print("ridge RMSE:", rmse(ridge))
+</pre>
+<div class="see"><b>What you should see:</b> lasso at λ<sub>min</sub> keeps every predictor (RMSE ≈ €1,120); at λ<sub>1se</sub> it drops 6 and RMSE rises only ~4%. Age always has by far the largest standardised coefficient.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Forgetting to standardise</b> before ridge/lasso in scikit-learn.</li>
+  <li><b>Choosing λ or the subset on the validation set and then reporting validation error</b> as if it were unbiased. Use CV inside the training data, then validate.</li>
+  <li><b>Trusting p-values after stepwise selection.</b> They ignore the search and are far too optimistic.</li>
+  <li><b>Interpreting lasso’s choice among correlated predictors</b> as meaningful. Rerun with a different seed and another one may be picked.</li>
+  <li><b>Penalising the intercept or dummy reference levels incorrectly</b>: let the library handle the intercept.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="b"><div class="q">Which method can set coefficients exactly to zero?</div><div class="opts"><button class="opt">Ridge</button><button class="opt">Lasso</button><button class="opt">OLS</button><button class="opt">PCA</button></div><div class="why">The L1 penalty’s corners produce exact zeros: built-in variable selection.</div></div>
+  <div class="qq" data-answer="d"><div class="q">As λ → 0, ridge and lasso estimates approach…</div><div class="opts"><button class="opt">zero</button><button class="opt">the intercept-only model</button><button class="opt">the PCA solution</button><button class="opt">the OLS estimates</button></div><div class="why">No penalty means ordinary least squares.</div></div>
+  <div class="qq" data-answer="a"><div class="q">Why is the 1-SE rule popular?</div><div class="opts"><button class="opt">It picks a simpler model whose CV error is statistically indistinguishable from the best</button><button class="opt">It always gives lower test error</button><button class="opt">It avoids the need for cross-validation</button><button class="opt">It guarantees all coefficients are non-zero</button></div><div class="why">Parsimony at almost no cost in accuracy.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Increasing λ generally…</div><div class="opts"><button class="opt">increases variance and decreases bias</button><button class="opt">has no effect on bias</button><button class="opt">increases bias and decreases variance</button><button class="opt">increases both</button></div><div class="why">More shrinkage means a more constrained, more biased but more stable model.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Two predictors are almost perfectly correlated. Which method tends to keep both with similar coefficients?</div><div class="opts"><button class="opt">Lasso</button><button class="opt">Ridge (or elastic net)</button><button class="opt">Forward selection</button><button class="opt">Best subset</button></div><div class="why">The L2 penalty spreads weight across correlated predictors.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w06.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

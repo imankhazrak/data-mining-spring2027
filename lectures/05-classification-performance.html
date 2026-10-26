@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L05 · Evaluating Classifiers · Data Mining</title>
+<meta name="description" content="Confusion matrices, cutoffs, accuracy, sensitivity, specificity, precision, ROC curves and AUC, lift and cumulative gains charts.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="5">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Evaluating Classifiers</h1>
+  <p class="lede">“96% accurate” can describe a useless model. Today we take a classifier’s output apart: which errors it makes, how the cutoff trades one error for another, and how ROC and lift charts summarise the whole trade-off in one picture.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 5.4–5.5</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"lg","label":"Logistic regression (L4)","x":115,"y":50,"state":"prev","href":"L4"},
+ {"id":"cm","label":"Confusion matrix","x":330,"y":50,"state":"today","href":"#cm"},
+ {"id":"cut","label":"Cutoff trade-off","x":535,"y":50,"state":"today","href":"#cutoff"},
+ {"id":"roc","label":"ROC & AUC","x":250,"y":150,"state":"today","href":"#roc"},
+ {"id":"lift","label":"Lift & gains","x":450,"y":150,"state":"today","href":"#lift"},
+ {"id":"r","label":"Rare events & costs (L12)","x":640,"y":205,"state":"later","href":"L12"},
+ {"id":"p","label":"Partitioning (L3)","x":110,"y":150,"state":"prev","href":"L3"}],
+ "edges":[["lg","cm"],["cm","cut"],["cut","roc"],["cut","lift"],["lift","r"],["p","roc","on validation data"]]}'></div>
+</section>
+
+<section class="lsec" id="cm">
+<h2>The confusion matrix</h2>
+<p>Every classification metric is built from four counts, computed on <b>validation</b> data. Call the class of interest (loan accepted, fraud, disease) the <b>positive</b> class.</p>
+<div class="two-col">
+<div class="table-wrap"><table class="cm-table" style="width:100%"><thead><tr><th></th><th>Predicted 0</th><th>Predicted 1</th></tr></thead><tbody><tr><th>Actual 0</th><td class="tn">TN<br><small>true negative</small></td><td class="fp">FP<br><small>false alarm</small></td></tr><tr><th>Actual 1</th><td class="fn">FN<br><small>missed</small></td><td class="tp">TP<br><small>hit</small></td></tr></tbody></table></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Metric</th><th>Formula</th></tr></thead>
+<tbody>
+<tr><td>Accuracy</td><td>(TP + TN) / n</td></tr>
+<tr><td><b>Sensitivity</b> (recall, TPR)</td><td>TP / (TP + FN)</td></tr>
+<tr><td><b>Specificity</b> (TNR)</td><td>TN / (TN + FP)</td></tr>
+<tr><td>Precision (PPV)</td><td>TP / (TP + FP)</td></tr>
+<tr><td>False positive rate</td><td>1 − specificity</td></tr>
+<tr><td>F1</td><td>2 · precision · recall / (precision + recall)</td></tr>
+</tbody></table></div>
+</div>
+<div class="predict" data-answer="b">
+  <div class="q">In the bank’s validation set, 9.65% of customers accepted the loan. What accuracy does the <b>naive rule</b> “predict nobody accepts” achieve?</div>
+  <div class="opts"><button class="opt">0%</button><button class="opt">90.35%</button><button class="opt">50%</button><button class="opt">9.65%</button></div>
+  <div class="reveal"><p><b>90.35%</b>, with a sensitivity of 0. Any model must beat this benchmark <em>on the metric that matters</em>. With imbalanced classes, accuracy alone is nearly meaningless.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="cutoff">
+<h2>Moving the cutoff</h2>
+<p>Below are the logistic model’s predicted probabilities for the 2,000 validation customers from Lecture 4: <b>real model output</b>. Slide the cutoff and watch every metric move at once.</p>
+<div class="demo">
+  <div class="dh"><b>Cutoff explorer</b><span class="muted small">Universal Bank · validation set</span></div>
+  <div class="db">
+    <canvas id="cutCanvas" aria-label="Score distributions and ROC curve"></canvas>
+    <div class="controls">
+      <label>Cutoff <input type="range" id="cut" min="0.01" max="0.99" step="0.01" value="0.5"><output id="cutV">0.50</output></label>
+      <label>Right panel <select id="rightView"><option value="roc">ROC curve</option><option value="gains">Cumulative gains</option></select></label>
+    </div>
+    <div class="two-col" style="align-items:start">
+      <div class="table-wrap" style="margin:10px 0 0"><table class="cm-table" style="width:100%"><thead><tr><th></th><th>Pred 0</th><th>Pred 1</th></tr></thead><tbody><tr><th>Actual 0</th><td class="tn" id="cTN"></td><td class="fp" id="cFP"></td></tr><tr><th>Actual 1</th><td class="fn" id="cFN"></td><td class="tp" id="cTP"></td></tr></tbody></table></div>
+      <div class="stats" id="cutStats" style="margin-top:10px"></div>
+    </div>
+    <p class="hint">Push the cutoff down to 0.1: sensitivity soars, precision drops. Push it to 0.9: almost every predicted acceptor is real, but most acceptors are missed. No cutoff is “correct”; the right one depends on the cost of each mistake.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="roc">
+<h2>ROC curve and AUC</h2>
+<p>The <b>ROC curve</b> plots sensitivity against 1 − specificity for <em>every</em> possible cutoff. A perfect model hugs the top-left corner; a random one follows the diagonal. The <b>area under the curve (AUC)</b> condenses it into one number:</p>
+<ul>
+  <li>AUC = 0.5: no better than random ordering. AUC = 1: perfect separation.</li>
+  <li>Interpretation: the probability that a randomly chosen positive gets a higher score than a randomly chosen negative.</li>
+  <li>AUC is cutoff-free, which is great for comparing models and useless for choosing a cutoff.</li>
+</ul>
+<div class="predict" data-answer="c">
+  <div class="q">Our model’s AUC is about 0.956. Which statement is correct?</div>
+  <div class="opts"><button class="opt">95.6% of customers are classified correctly</button><button class="opt">At cutoff 0.5 the sensitivity is 0.956</button><button class="opt">A random acceptor outranks a random non-acceptor about 95.6% of the time</button></div>
+  <div class="reveal"><p><b>C.</b> AUC is about <em>ranking</em>, across all cutoffs. Accuracy and sensitivity belong to a specific cutoff.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="lift">
+<h2>Lift and cumulative gains</h2>
+<p>Often we can only act on a fraction of cases, such as mailing the top 10% of customers. Sort validation records by predicted probability, then ask: <em>what share of all positives is captured in the top x%?</em></p>
+<div class="table-wrap"><table>
+<thead><tr><th>Top x% contacted</th><th class="num">Share of all acceptors captured</th><th class="num">Lift</th></tr></thead>
+<tbody>
+<tr><td>5%</td><td class="num">50%</td><td class="num">9.9</td></tr>
+<tr><td>10%</td><td class="num">76%</td><td class="num">7.6</td></tr>
+<tr><td>20%</td><td class="num">91%</td><td class="num">4.5</td></tr>
+<tr><td>30%</td><td class="num">94%</td><td class="num">3.1</td></tr>
+</tbody></table></div>
+<p><b>Lift</b> = (response rate in the selected group) ÷ (overall response rate). Contacting the model’s top 10% finds acceptors 7.6× as often as contacting 10% at random. Switch the demo’s right panel to “Cumulative gains” to see the curve.</p>
+<div class="predict" data-answer="a">
+  <div class="q">A marketing budget allows 400 mailings out of 2,000 customers (20%). Using the model instead of random selection, about how many acceptors do you reach? (There are 193 in total.)</div>
+  <div class="opts"><button class="opt">About 175</button><button class="opt">About 39</button><button class="opt">About 193</button><button class="opt">About 96</button></div>
+  <div class="reveal"><p><b>About 175</b> (91% of 193). Random mailing reaches only ≈ 39 (20%). That gap is the business value of the model, and it is a much more persuasive number for a manager than AUC.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: evaluate the loan model</h2>
+<div class="codewalk-head"><p style="margin:0">Continue from Lecture 4 (you need <code>prob</code> and the validation labels).</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Confusion matrix with all the metrics</h3>
+<pre class="code r">
+library(caret)
+pred <- factor(ifelse(prob >= 0.5, 1, 0), levels = c(0, 1))
+confusionMatrix(pred, factor(valid$Personal.Loan), positive = "1")
+# reports Accuracy, Kappa, Sensitivity, Specificity, Pos Pred Value, ...
+</pre>
+<pre class="code py">
+from sklearn.metrics import classification_report, confusion_matrix
+pred = (prob >= 0.5).astype(int)
+print(confusion_matrix(y_valid, pred))
+print(classification_report(y_valid, pred, digits=3))   # recall of class 1 = sensitivity
+</pre>
+</div>
+<div class="step" data-step="2"><h3>ROC curve and AUC</h3>
+<pre class="code r">
+library(pROC)
+r <- roc(valid$Personal.Loan, prob)
+plot(r, print.auc = TRUE, legacy.axes = TRUE)
+auc(r)                                  # ~0.96
+coords(r, "best", best.method = "youden")   # cutoff maximising sens + spec
+</pre>
+<pre class="code py">
+from sklearn.metrics import roc_curve, roc_auc_score, RocCurveDisplay
+print("AUC:", roc_auc_score(y_valid, prob))   # ~0.96
+RocCurveDisplay.from_predictions(y_valid, prob)
+fpr, tpr, thr = roc_curve(y_valid, prob)
+print("Youden-best cutoff:", thr[(tpr - fpr).argmax()])
+</pre>
+</div>
+<div class="step" data-step="3"><h3>Cumulative gains and decile lift</h3>
+<pre class="code r">
+ord   <- order(prob, decreasing = TRUE)
+yy    <- valid$Personal.Loan[ord]
+gains <- cumsum(yy) / sum(yy)
+plot(seq_along(yy) / length(yy), gains, type = "l", xlab = "Fraction contacted",
+     ylab = "Fraction of acceptors captured"); abline(0, 1, lty = 2)
+decile <- ceiling(10 * seq_along(yy) / length(yy))
+barplot(tapply(yy, decile, mean) / mean(yy), names.arg = 1:10, ylab = "Lift", xlab = "Decile")
+</pre>
+<pre class="code py">
+import numpy as np, pandas as pd, matplotlib.pyplot as plt
+df = pd.DataFrame({"prob": np.asarray(prob), "actual": y_valid.values}).sort_values("prob", ascending=False)
+df["gains"] = df["actual"].cumsum() / df["actual"].sum()
+frac = np.arange(1, len(df) + 1) / len(df)
+plt.plot(frac, df["gains"]); plt.plot([0, 1], [0, 1], "--"); plt.xlabel("Fraction contacted"); plt.show()
+df["decile"] = np.ceil(10 * frac).astype(int)
+(df.groupby("decile")["actual"].mean() / df["actual"].mean()).plot.bar(ylabel="Lift")
+</pre>
+<div class="see"><b>What you should see:</b> the top decile has a lift near 7–8; by the 4th decile almost all acceptors are captured and lift falls below 1 after that.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Wrong positive class.</b> R’s <code>confusionMatrix</code> defaults to the first factor level (“0”). Always set <code>positive = "1"</code>.</li>
+  <li><b>Reporting accuracy alone</b> on imbalanced data. Always show sensitivity and specificity, or precision, too.</li>
+  <li><b>Choosing the cutoff on the test set.</b> Choose it on validation data, then report test performance at that cutoff.</li>
+  <li><b>Comparing AUCs from different validation sets.</b> Compare models on the same records.</li>
+  <li><b>Confusing precision with sensitivity.</b> “Of those flagged, how many are real?” is precision; “of the real ones, how many did we flag?” is sensitivity.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="a"><div class="q">TP = 128, FN = 65, TN = 1,791, FP = 16. Sensitivity is…</div><div class="opts"><button class="opt">128/193 ≈ 0.66</button><button class="opt">128/144 ≈ 0.89</button><button class="opt">1,791/1,807 ≈ 0.99</button><button class="opt">1,919/2,000 ≈ 0.96</button></div><div class="why">TP / (TP + FN): of the 193 actual acceptors, 128 were found.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Same counts. Precision is…</div><div class="opts"><button class="opt">0.66</button><button class="opt">0.99</button><button class="opt">128/144 ≈ 0.89</button><button class="opt">0.96</button></div><div class="why">TP / (TP + FP): of 144 flagged, 128 were real acceptors.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Raising the cutoff will typically…</div><div class="opts"><button class="opt">raise sensitivity and lower specificity</button><button class="opt">raise both</button><button class="opt">change the AUC</button><button class="opt">lower sensitivity and raise specificity</button></div><div class="why">Fewer cases are called positive, so fewer hits and fewer false alarms. AUC is unaffected.</div></div>
+  <div class="qq" data-answer="b"><div class="q">An ROC curve that lies along the diagonal indicates…</div><div class="opts"><button class="opt">a perfect classifier</button><button class="opt">a model no better than random ranking</button><button class="opt">a cutoff of 0.5</button><button class="opt">high precision</button></div><div class="why">AUC = 0.5.</div></div>
+  <div class="qq" data-answer="b"><div class="q">The top decile has a lift of 7.6. This means the top 10% of scored customers…</div><div class="opts"><button class="opt">contain 7.6% of acceptors</button><button class="opt">respond at 7.6× the overall average rate</button><button class="opt">have probability ≥ 0.76</button><button class="opt">are 76% accurate</button></div><div class="why">Lift compares the response rate in a group to the base rate.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w05.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

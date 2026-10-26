@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L08 · k-Nearest Neighbors · Data Mining</title>
+<meta name="description" content="k-nearest neighbors for classification and prediction: distance, standardisation, choosing k by cross-validation and the bias-variance trade-off.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="8">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>k-Nearest Neighbors</h1>
+  <p class="lede">The simplest learner of all has no equation: to classify a new record, find the k most similar records you already know and let them vote. That simplicity hides two decisions that make or break it, how to measure “similar” and how many neighbours to ask.</p>
+  <div class="lec-meta"><span class="pill">~70 min</span><span class="pill">Textbook ch. 7</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"cv","label":"Cross-validation (L3)","x":110,"y":50,"state":"prev","href":"L3"},
+ {"id":"d","label":"Distance","x":310,"y":50,"state":"today","href":"#distance"},
+ {"id":"s","label":"Standardise","x":490,"y":50,"state":"today","href":"#distance"},
+ {"id":"v","label":"Vote / average","x":240,"y":150,"state":"today","href":"#algo"},
+ {"id":"k","label":"Choose k (bias–variance)","x":450,"y":150,"state":"today","href":"#k"},
+ {"id":"cl","label":"Clustering distances (L13)","x":650,"y":110,"state":"later","href":"L13"},
+ {"id":"cf","label":"Collaborative filtering (L14)","x":640,"y":205,"state":"later","href":"L14"}],
+ "edges":[["d","s"],["d","v"],["cv","k"],["v","k"],["s","cl"],["k","cf","user-based kNN"]]}'></div>
+</section>
+
+<section class="lsec" id="algo">
+<h2>The algorithm</h2>
+<ol>
+  <li>Choose a distance measure and a number of neighbours <b>k</b>.</li>
+  <li>For a new record, compute its distance to every training record.</li>
+  <li>Take the k nearest.</li>
+  <li><b>Classification:</b> predict the majority class (or report the class proportion as a probability and apply a cutoff). <b>Prediction:</b> predict the average (or distance-weighted average) of their Y values.</li>
+</ol>
+<p>kNN is <b>nonparametric</b> and <b>lazy</b>: there is no fitting step and no coefficients, and all the work happens at prediction time. It can follow very irregular boundaries, but it needs lots of data, struggles with many predictors (the “curse of dimensionality”) and is slow to score huge datasets.</p>
+</section>
+
+<section class="lsec" id="distance">
+<h2>Distance and why scaling is mandatory</h2>
+<p>The default is Euclidean distance between records \(\mathbf{x}\) and \(\mathbf{u}\):</p>
+<div class="formula">\[ d(\mathbf{x}, \mathbf{u}) = \sqrt{(x_1 - u_1)^2 + (x_2 - u_2)^2 + \cdots + (x_p - u_p)^2} \]</div>
+<p>Squared differences add up across variables, so a variable measured in large units dominates. In the riding-mower data, income ranges over about $33k–$110k while lot size ranges over 14–24 thousand ft². Unscaled, “nearest” almost only means “similar income”.</p>
+<div class="demo">
+  <div class="dh"><b>Classify a new household</b><span class="muted small">24 households: owners vs. non-owners of a riding mower</span></div>
+  <div class="db">
+    <canvas id="knnCanvas" aria-label="kNN classification scatter plot"></canvas>
+    <div class="controls">
+      <label>k <input type="range" id="kk" min="1" max="23" step="2" value="3"><output id="kkV">3</output></label>
+      <label><input type="checkbox" id="kScale" checked> standardise before measuring distance</label>
+      <label><input type="checkbox" id="kRegion"> shade decision regions</label>
+    </div>
+    <div class="stats" id="knnStats"></div>
+    <p class="hint">Click (or drag) anywhere to move the new household ★. Its k nearest neighbours are circled. Untick “standardise” and watch the neighbourhood become a thin vertical strip: only income matters. Turn on the regions and compare k = 1 (jagged islands: overfitting) with k = 23 (nearly the whole dataset votes, so local structure disappears).</p>
+  </div>
+</div>
+<div class="predict" data-answer="b">
+  <div class="q">A colleague forgets to standardise before kNN on the bank data (income in $000s, CCAvg in $000s per month, Online as 0/1, Mortgage in $000s up to 635). What do you expect?</div>
+  <div class="opts"><button class="opt">Same results: kNN is scale-invariant</button><button class="opt">Worse results: Mortgage and Income dominate the distance and the binary variables barely count</button><button class="opt">Better results: raw units carry more information</button></div>
+  <div class="reveal"><p><b>B.</b> In the code walk, the same k gives a validation sensitivity of <b>0.62 standardised vs. 0.35 unstandardised</b>. Standardise with the <em>training</em> means and SDs, and apply them to new records.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="k">
+<h2>Choosing k</h2>
+<div class="two-col">
+<div class="callout"><span class="ct">Small k (e.g. 1)</span><p>Very flexible; follows local noise. Low bias, <b>high variance</b>: overfits.</p></div>
+<div class="callout"><span class="ct">Large k (up to n)</span><p>Very smooth; at k = n it always predicts the majority class. <b>High bias</b>, low variance: underfits.</p></div>
+</div>
+<p>Choose k by cross-validated performance, just like the polynomial degree in Lecture 3. Odd values avoid ties in two-class problems. On Universal Bank, 10-fold CV accuracy by k:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>k</th><th class="num">1</th><th class="num">3</th><th class="num">5</th><th class="num">7</th><th class="num">11</th><th class="num">15</th><th class="num">19</th></tr></thead>
+<tbody><tr><td>CV accuracy</td><td class="num">.957</td><td class="num"><b>.962</b></td><td class="num">.957</td><td class="num">.951</td><td class="num">.946</td><td class="num">.941</td><td class="num">.937</td></tr></tbody></table></div>
+<div class="predict" data-answer="a">
+  <div class="q">kNN with k = 1 is evaluated on its own <em>training</em> data. What accuracy will it report?</div>
+  <div class="opts"><button class="opt">100% (unless there are duplicate records with different labels)</button><button class="opt">About the same as validation accuracy</button><button class="opt">50%</button></div>
+  <div class="reveal"><p><b>100%.</b> Each training point’s nearest neighbour is itself. This is the purest example of why training error says nothing about predictive performance.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: kNN for loan acceptance</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/UniversalBank.csv" download>UniversalBank.csv</a> (prepared as in Lecture 4).</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Stratified split</h3>
+<pre class="code r">
+library(caret)
+bank <- read.csv("data/UniversalBank.csv")[, -c(1, 5)]          # drop ID and ZIP
+bank$Education <- factor(bank$Education, labels = c("Undergrad", "Graduate", "Advanced"))
+bank$Personal.Loan <- factor(bank$Personal.Loan, labels = c("No", "Yes"))
+set.seed(1)
+idx <- createDataPartition(bank$Personal.Loan, p = 0.6, list = FALSE)   # keeps 9.6% in both
+train <- bank[idx, ]; valid <- bank[-idx, ]
+</pre>
+<pre class="code py">
+import pandas as pd
+from sklearn.model_selection import train_test_split
+bank = pd.read_csv("data/UniversalBank.csv").drop(columns=["ID", "ZIP Code"])
+bank["Education"] = pd.Categorical(bank["Education"].map({1: "Undergrad", 2: "Graduate", 3: "Advanced"}),
+                                   categories=["Undergrad", "Graduate", "Advanced"])
+X = pd.get_dummies(bank.drop(columns="Personal Loan"), drop_first=True, dtype=int)
+y = bank["Personal Loan"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1, stratify=y)
+</pre>
+</div>
+<div class="step" data-step="2"><h3>Standardise inside CV, tune k</h3>
+<pre class="code r">
+ctrl <- trainControl(method = "cv", number = 10)
+knn_fit <- train(Personal.Loan ~ ., data = train, method = "knn",
+                 preProcess = c("center", "scale"),        # learned on each training fold
+                 tuneGrid = data.frame(k = seq(1, 19, 2)), trControl = ctrl)
+knn_fit; plot(knn_fit)
+</pre>
+<pre class="code py">
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+pipe = make_pipeline(StandardScaler(), KNeighborsClassifier())     # scaler fit within each fold
+grid = GridSearchCV(pipe, {"kneighborsclassifier__n_neighbors": list(range(1, 21, 2))},
+                    cv=StratifiedKFold(10, shuffle=True, random_state=1), scoring="accuracy")
+grid.fit(X_train, y_train)
+print(grid.best_params_, round(grid.best_score_, 4))
+</pre>
+<div class="see"><b>What you should see:</b> best k = 3 (or nearby) with CV accuracy ≈ 0.96. Accuracy declines slowly as k grows.</div>
+</div>
+<div class="step" data-step="3"><h3>Validate, and compare with no scaling</h3>
+<pre class="code r">
+pred <- predict(knn_fit, valid)
+confusionMatrix(pred, valid$Personal.Loan, positive = "Yes")
+prob <- predict(knn_fit, valid, type = "prob")[, "Yes"]   # share of neighbours voting Yes
+</pre>
+<pre class="code py">
+from sklearn.metrics import confusion_matrix, recall_score, accuracy_score
+pred = grid.predict(X_valid)
+print(accuracy_score(y_valid, pred), recall_score(y_valid, pred)); print(confusion_matrix(y_valid, pred))
+raw = KNeighborsClassifier(n_neighbors=3).fit(X_train, y_train).predict(X_valid)   # no scaling
+print("unscaled:", accuracy_score(y_valid, raw), recall_score(y_valid, raw))
+</pre>
+<div class="see"><b>What you should see:</b> standardised: accuracy ≈ 0.96, sensitivity ≈ 0.62. Unscaled: accuracy ≈ 0.90, sensitivity ≈ 0.35. Same algorithm, same k.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Not standardising</b>, or standardising with validation-set statistics.</li>
+  <li><b>Using many irrelevant predictors.</b> Every extra dimension dilutes the distance. Select variables first (L6) or reduce dimension (L7).</li>
+  <li><b>Choosing k on training accuracy</b> (always k = 1).</li>
+  <li><b>Raw categorical codes</b> in distances: use dummies, which also need sensible scaling.</li>
+  <li><b>Expecting speed.</b> Scoring compares with every training record; large n means slow predictions.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="c"><div class="q">kNN is called “lazy” because…</div><div class="opts"><button class="opt">it uses small k</button><button class="opt">it ignores half the data</button><button class="opt">it does no model fitting; computation happens when predicting</button><button class="opt">it never overfits</button></div><div class="why">Training = storing the data.</div></div>
+  <div class="qq" data-answer="a"><div class="q">Increasing k typically…</div><div class="opts"><button class="opt">smooths the decision boundary (more bias, less variance)</button><button class="opt">makes the boundary more jagged</button><button class="opt">has no effect</button><button class="opt">reduces bias</button></div><div class="why">More neighbours average over a wider area.</div></div>
+  <div class="qq" data-answer="d"><div class="q">For kNN <em>prediction</em> of a numeric Y, the prediction is…</div><div class="opts"><button class="opt">the majority class</button><button class="opt">the nearest neighbour’s Y only</button><button class="opt">a regression line through the neighbours</button><button class="opt">the (possibly weighted) average of the k neighbours’ Y</button></div><div class="why">Average instead of vote.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Why prefer odd k for two-class problems?</div><div class="opts"><button class="opt">Odd k is faster</button><button class="opt">It avoids tied votes</button><button class="opt">Even k always overfits</button><button class="opt">CV requires it</button></div><div class="why">With an odd number of voters, two classes can’t tie.</div></div>
+  <div class="qq" data-answer="c"><div class="q">With 50 predictors, most of them noise, kNN tends to perform poorly because…</div><div class="opts"><button class="opt">k must equal 50</button><button class="opt">standardisation fails</button><button class="opt">distances become dominated by irrelevant dimensions (curse of dimensionality)</button><button class="opt">kNN cannot handle more than 10 variables</button></div><div class="why">In high dimensions, all points become roughly equally far apart.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w08.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

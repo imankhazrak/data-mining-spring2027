@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L13 · Cluster Analysis · Data Mining</title>
+<meta name="description" content="Unsupervised clustering: distance measures, hierarchical clustering with linkage methods and dendrograms, k-means, choosing k and profiling clusters, with the public-utilities data.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="13">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Cluster Analysis</h1>
+  <p class="lede">No outcome variable, no right answer, and still a lot to learn. Clustering groups records so that members of a group are alike and different groups are not. We will build groups two ways, hierarchically and with k-means, and learn to judge whether the groups mean anything.</p>
+  <div class="lec-meta"><span class="pill">2 sessions · ~140 min</span><span class="pill">Textbook ch. 15</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"d","label":"Distance & scaling (L8)","x":120,"y":50,"state":"prev","href":"L8"},
+ {"id":"h","label":"Hierarchical","x":330,"y":50,"state":"today","href":"#hier"},
+ {"id":"l","label":"Linkage choice","x":520,"y":50,"state":"today","href":"#hier"},
+ {"id":"k","label":"k-means","x":260,"y":150,"state":"today","href":"#kmeans"},
+ {"id":"ch","label":"Choose k & validate","x":460,"y":150,"state":"today","href":"#validate"},
+ {"id":"pca","label":"PCA for plotting (L7)","x":640,"y":120,"state":"prev","href":"L7"},
+ {"id":"a","label":"Association rules (L14)","x":640,"y":205,"state":"later","href":"L14"}],
+ "edges":[["d","h"],["h","l"],["d","k"],["k","ch"],["l","ch"],["pca","ch"],["ch","a"]]}'></div>
+</section>
+
+<section class="lsec" id="distance">
+<h2>Distance between records, and between clusters</h2>
+<p>Everything depends on how “similar” is measured. For numeric data, <b>Euclidean distance on standardised variables</b> is the default (unscaled, Sales in kWh would swamp everything else, as in L7–L8). Alternatives: Manhattan (sum of absolute differences, more robust), correlation-based distance (similar <em>profiles</em>), and matching or Jaccard coefficients for binary data.</p>
+<p>Hierarchical clustering also needs a distance between <em>clusters</em>, the <b>linkage</b>:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Linkage</th><th>Distance between clusters A and B</th><th>Tends to produce</th></tr></thead>
+<tbody>
+<tr><td><b>Single</b> (nearest neighbour)</td><td>closest pair of members</td><td>Long chains; one giant cluster plus singletons</td></tr>
+<tr><td><b>Complete</b> (farthest neighbour)</td><td>farthest pair of members</td><td>Compact clusters of similar diameter</td></tr>
+<tr><td><b>Average</b></td><td>average over all cross-pairs</td><td>A compromise</td></tr>
+<tr><td><b>Ward</b></td><td>increase in within-cluster sum of squares when merging</td><td>Compact, similar-sized clusters (closest in spirit to k-means)</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="lsec" id="hier">
+<h2>Hierarchical (agglomerative) clustering</h2>
+<ol>
+  <li>Start with each of the n records as its own cluster.</li>
+  <li>Merge the two closest clusters (according to the linkage).</li>
+  <li>Repeat until one cluster remains. The sequence of merges is drawn as a <b>dendrogram</b>.</li>
+</ol>
+<p>Cutting the dendrogram at a height gives a clustering: every vertical line the cut crosses is one cluster.</p>
+<div class="demo">
+  <div class="dh"><b>Dendrogram of 22 U.S. utilities</b><span class="muted small">8 standardised financial variables · real linkages</span></div>
+  <div class="db">
+    <canvas id="dendCanvas" aria-label="Dendrogram of utilities"></canvas>
+    <div class="controls">
+      <label>Linkage <select id="dLink"><option value="ward">Ward</option><option value="complete">Complete</option><option value="average">Average</option><option value="single">Single</option></select></label>
+      <label>Number of clusters <input type="range" id="dK" min="1" max="8" value="4"><output id="dKV">4</output></label>
+    </div>
+    <div id="dGroups" class="small" style="margin-top:10px"></div>
+    <p class="hint">Switch to <b>single</b> linkage at 4 clusters: chaining puts 19 of the 22 utilities in one group. Ward and complete give balanced, interpretable groups. Notice how the same data produce different answers. Clustering is a tool for exploration, not an oracle.</p>
+  </div>
+</div>
+<div class="predict" data-answer="b">
+  <div class="q">In a dendrogram, two utilities are joined at a very low height. What does that tell you?</div>
+  <div class="opts"><button class="opt">They are far apart in the original data</button><button class="opt">They are very similar: they merged early, at a small distance</button><button class="opt">They are adjacent on the x-axis, which means they are similar</button></div>
+  <div class="reveal"><p><b>B.</b> Read similarity from the <em>merge height</em>, not from left-right position. Leaves next to each other on the axis can sit in very different branches.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="kmeans">
+<h2>k-means</h2>
+<p>k-means seeks k clusters that minimise the total within-cluster sum of squares (WSS):</p>
+<div class="formula">\[ \text{WSS} = \sum_{j=1}^{k} \sum_{i \in C_j} \lVert \mathbf{x}_i - \bar{\mathbf{x}}_j \rVert^2 \]</div>
+<ol>
+  <li>Choose k starting centroids (randomly, or with k-means++).</li>
+  <li><b>Assign</b> every record to its nearest centroid.</li>
+  <li><b>Update</b> each centroid to the mean of its records.</li>
+  <li>Repeat 2–3 until assignments stop changing.</li>
+</ol>
+<div class="demo">
+  <div class="dh"><b>Step through k-means</b><span class="muted small">simulated customers</span></div>
+  <div class="db">
+    <canvas id="kmCanvas" aria-label="k-means clustering animation"></canvas>
+    <div class="controls">
+      <label>k <input type="range" id="kmK" min="1" max="8" value="3"><output id="kmKV">3</output></label>
+      <button class="btn sm primary" id="kmStep">Step: assign</button>
+      <button class="btn sm" id="kmRun">Run to convergence</button>
+      <button class="btn sm" id="kmInit">New random start</button>
+      <button class="btn sm ghost" id="kmData">New data</button>
+    </div>
+    <div class="stats" id="kmStats"></div>
+    <p class="hint">Alternate “assign” and “update” and watch WSS fall at every step: k-means can only improve, never get worse. Click “New random start” several times at k = 4 or 5: different starts can converge to different, worse solutions (local optima). That is why software runs many starts (<code>nstart = 25</code>, <code>n_init = 25</code>) and keeps the best.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="validate">
+<h2>Choosing k and judging clusters</h2>
+<ul>
+  <li><b>Elbow plot:</b> WSS always falls as k grows; look for the bend where extra clusters stop paying. For the utilities: k = 1: 176 · 2: 137 · 3: 107 · <b>4: 84</b> · 5: 71 · 6: 60.</li>
+  <li><b>Silhouette width:</b> how much closer each record is to its own cluster than to the next one (−1 to 1; higher is better).</li>
+  <li><b>Stability:</b> do the clusters survive a different random start, a different linkage or a bootstrap sample?</li>
+  <li><b>Interpretability and usefulness:</b> can you name each cluster, and would a decision differ by cluster? This is the test that matters most.</li>
+</ul>
+<p>k-means with k = 4 on the standardised utilities gives clusters that are easy to name from their profiles (centroids in original units):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Cluster</th><th>Members</th><th>Profile</th></tr></thead>
+<tbody>
+<tr><td><b>High-sales, cheap fuel</b></td><td>Idaho, Nevada, Puget</td><td>Very high sales (≈15,500), lowest fuel cost, no nuclear: western, largely hydro-powered</td></tr>
+<tr><td><b>Expensive fuel</b></td><td>Boston, NY, Hawaiian, New England, Pacific, San Diego, United</td><td>Highest fuel cost (≈1.80), lowest sales</td></tr>
+<tr><td><b>Efficient, profitable</b></td><td>Arizona, Central, Florida, Kentucky, Oklahoma, Southern, Texas</td><td>Highest rate of return (≈12.5), lowest cost</td></tr>
+<tr><td><b>Nuclear-heavy</b></td><td>Commonwealth, Madison, Northern, Wisconsin, Virginia</td><td>Nuclear share ≈ 38%</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="c">
+  <div class="q">Which statement about k-means is <em>false</em>?</div>
+  <div class="opts"><button class="opt">The result depends on the starting centroids</button><button class="opt">It requires choosing k in advance</button><button class="opt">It is guaranteed to find the clustering with the smallest possible WSS</button><button class="opt">It tends to find roughly spherical, similar-sized clusters</button></div>
+  <div class="reveal"><p><b>C is false.</b> Each run reaches a <em>local</em> minimum. Many random starts make a good solution likely, not certain.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: clustering U.S. utilities</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/Utilities.csv" download>Utilities.csv</a> (22 companies, 8 variables). Practice set: <a href="../data/Universities.csv" download>Universities.csv</a>.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Standardise and compute distances</h3>
+<pre class="code r">
+utilities <- read.csv("data/Utilities.csv")
+rownames(utilities) <- trimws(utilities$Company)
+z <- scale(utilities[, -1])                 # standardise all 8 variables
+d <- dist(z, method = "euclidean")
+round(as.matrix(d)[1:5, 1:5], 2)
+</pre>
+<pre class="code py">
+import pandas as pd, numpy as np
+from sklearn.preprocessing import StandardScaler
+utilities = pd.read_csv("data/Utilities.csv")
+utilities["Company"] = utilities["Company"].str.strip()
+utilities = utilities.set_index("Company")
+z = StandardScaler().fit_transform(utilities)
+from scipy.spatial.distance import pdist, squareform
+print(pd.DataFrame(squareform(pdist(z)), index=utilities.index, columns=utilities.index).iloc[:5, :5].round(2))
+</pre>
+</div>
+<div class="step" data-step="2"><h3>Hierarchical clustering and dendrogram</h3>
+<pre class="code r">
+hc <- hclust(d, method = "ward.D2")         # also try "single", "complete", "average"
+plot(hc, hang = -1, cex = 0.8)
+rect.hclust(hc, k = 4, border = 2:5)
+memb <- cutree(hc, k = 4); table(memb)
+</pre>
+<pre class="code py">
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+import matplotlib.pyplot as plt
+L = linkage(z, method="ward")               # also "single", "complete", "average"
+plt.figure(figsize=(10, 4)); dendrogram(L, labels=utilities.index.tolist(), leaf_rotation=90); plt.show()
+memb = fcluster(L, t=4, criterion="maxclust"); print(pd.Series(memb).value_counts())
+</pre>
+</div>
+<div class="step" data-step="3"><h3>k-means, elbow, and cluster profiles</h3>
+<pre class="code r">
+set.seed(1)
+wss <- sapply(1:8, function(k) kmeans(z, centers = k, nstart = 25)$tot.withinss)
+plot(1:8, wss, type = "b", xlab = "k", ylab = "WSS")    # elbow near 4
+km <- kmeans(z, centers = 4, nstart = 25)
+split(rownames(z), km$cluster)
+aggregate(utilities[, -1], by = list(cluster = km$cluster), FUN = mean)   # profiles, original units
+library(cluster); plot(silhouette(km$cluster, d))
+</pre>
+<pre class="code py">
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+wss = [KMeans(k, n_init=25, random_state=1).fit(z).inertia_ for k in range(1, 9)]
+plt.plot(range(1, 9), wss, "o-"); plt.xlabel("k"); plt.ylabel("WSS"); plt.show()
+km = KMeans(4, n_init=25, random_state=1).fit(z)
+print(utilities.groupby(km.labels_).mean().round(2))                       # profiles, original units
+for c in range(4): print(c, list(utilities.index[km.labels_ == c]))
+print("silhouette:", round(silhouette_score(z, km.labels_), 3))
+</pre>
+<div class="see"><b>What you should see:</b> WSS 176 → 137 → 107 → 84 → 71 for k = 1…5, and four clusters matching the table above (label numbers will differ).</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Not standardising:</b> the cluster structure is then just the variable with the biggest units.</li>
+  <li><b>Trusting one run of k-means.</b> Use many starts and check stability.</li>
+  <li><b>Reading left-right order in a dendrogram</b> as similarity.</li>
+  <li><b>Clustering on irrelevant variables:</b> every variable included shapes the distance. Choose variables for the <em>purpose</em> of the segmentation.</li>
+  <li><b>Treating clusters as real, natural categories.</b> Clustering always returns clusters, even for structureless data.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="a"><div class="q">Which linkage is most prone to “chaining”?</div><div class="opts"><button class="opt">Single</button><button class="opt">Complete</button><button class="opt">Ward</button><button class="opt">Average</button></div><div class="why">Single linkage merges via the closest pair, so clusters can grow like a chain.</div></div>
+  <div class="qq" data-answer="c"><div class="q">In k-means, the “update” step…</div><div class="opts"><button class="opt">assigns each record to the nearest centroid</button><button class="opt">chooses k</button><button class="opt">moves each centroid to the mean of its assigned records</button><button class="opt">merges the two closest clusters</button></div><div class="why">Assign, then update.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Why does WSS alone not choose k?</div><div class="opts"><button class="opt">WSS can increase with k</button><button class="opt">WSS always decreases as k grows, reaching 0 at k = n</button><button class="opt">WSS is only defined for k = 2</button><button class="opt">WSS ignores the centroids</button></div><div class="why">Look for the elbow, or use silhouettes and usefulness.</div></div>
+  <div class="qq" data-answer="d"><div class="q">Which is a sign of a <em>useful</em> clustering for a business?</div><div class="opts"><button class="opt">It has exactly 2 clusters</button><button class="opt">Every cluster has the same size</button><button class="opt">It was produced by Ward’s method</button><button class="opt">Clusters can be named and lead to different actions</button></div><div class="why">Usefulness is the final criterion.</div></div>
+  <div class="qq" data-answer="b"><div class="q">k-means is <em>not</em> well suited to…</div><div class="opts"><button class="opt">compact, round clusters</button><button class="opt">elongated or nested (ring-shaped) clusters</button><button class="opt">standardised numeric data</button><button class="opt">large datasets</button></div><div class="why">Nearest-centroid assignment carves space into convex regions.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w13.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

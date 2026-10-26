@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Syllabus · Data Mining · Spring 2027</title>
+<meta name="description" content="Syllabus for Data Mining, Spring 2027: outcomes, materials, grading, policies.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="syllabus" data-root="">
+<div id="site-header"></div>
+<main id="main">
+<div class="wrap">
+<header class="page-head">
+  <span class="eyebrow"><span data-c="code"></span> · <span data-c="term"></span></span>
+  <h1>Syllabus</h1>
+  <p class="lede">Everything you need to know about how the course runs: what you will learn, how you will be graded, and the policies that keep things fair. If anything here conflicts with an announcement on <span data-c="lms.name"></span>, the newer announcement wins.</p>
+  <div class="cta"><button class="btn sm" onclick="window.print()">Print / save as PDF</button><a class="btn sm ghost" href="schedule.html">Schedule</a><a class="btn sm ghost" href="assignments.html">Deadlines</a></div>
+</header>
+
+<div class="with-side">
+<nav class="side-toc" aria-label="Syllabus sections">
+  <a href="#info">Course information</a>
+  <a href="#description">Description</a>
+  <a href="#outcomes">Learning outcomes</a>
+  <a href="#prereq">Prerequisites</a>
+  <a href="#materials">Materials &amp; software</a>
+  <a href="#rhythm">Weekly rhythm</a>
+  <a href="#grading">Grading</a>
+  <a href="#components">Graded work</a>
+  <a href="#late">Late work &amp; make-ups</a>
+  <a href="#attendance">Attendance</a>
+  <a href="#integrity">Academic honesty &amp; AI</a>
+  <a href="#access">Accessibility</a>
+  <a href="#wellbeing">Support &amp; well-being</a>
+  <a href="#comms">Communication</a>
+  <a href="#changes">Changes</a>
+</nav>
+
+<div class="prose">
+<h2 id="info" style="margin-top:0">Course information</h2>
+<div class="table-wrap"><table><tbody>
+  <tr><th style="width:34%">Course</th><td><span data-c="code"></span>: <span data-c="title"></span> (<span data-c="credits"></span>)</td></tr>
+  <tr><th>Term</th><td><span data-c="term"></span> · Jan 11 – Apr 30, 2027</td></tr>
+  <tr><th>Meetings</th><td><span data-c="meeting.days"></span>, <span data-c="meeting.time"></span> · <span data-c="meeting.room"></span></td></tr>
+  <tr><th>Instructor</th><td><span data-c="instructor.name"></span>, <span data-c="instructor.title"></span><br><a data-c-href="mailto:instructor.email" data-c="instructor.email"></a></td></tr>
+  <tr><th>Office &amp; hours</th><td><span data-c="instructor.office"></span><br><span data-c="instructor.officeHours"></span></td></tr>
+  <tr><th>Teaching assistant</th><td><span data-c="ta.name"></span> · <span data-c="ta.email"></span> · Office hours: <span data-c="ta.officeHours"></span></td></tr>
+  <tr><th>Course site</th><td>This website (lectures, schedule, deadlines) and <span data-c="lms.name"></span> (submissions, grades, announcements)</td></tr>
+</tbody></table></div>
+
+<h2 id="description">Course description</h2>
+<p>Data mining is the set of tools, methods and theory for finding patterns in data and using them to predict, group and recommend. The course covers the complete workflow: exploring and preparing data, partitioning it honestly, fitting supervised models for numerical and categorical outcomes, evaluating them on data they have not seen, and using unsupervised methods when there is no outcome at all.</p>
+<p>Methods include multiple linear and logistic regression, variable selection and regularization (ridge, lasso, elastic net), principal component analysis, k-nearest neighbors, classification and regression trees, neural networks, ensembles (bagging, random forests and boosting), strategies for rare events and imbalanced classes, cluster analysis, association rules and collaborative filtering. The emphasis is on <em>predictive</em> performance, judged on data the model has never seen, and on communicating results to people who will act on them.</p>
+
+<h2 id="outcomes">Learning outcomes</h2>
+<p>By the end of the course you will be able to:</p>
+<ol>
+  <li><b>Frame</b> a business or scientific question as a data-mining task (prediction vs. classification vs. clustering vs. association) and choose suitable methods.</li>
+  <li><b>Prepare</b> data for modeling: handle categorical predictors, missing values and scaling, and partition into training, validation and test sets without leakage.</li>
+  <li><b>Fit and tune</b> regression, classification and ensemble models in R and Python, using cross-validation to choose complexity.</li>
+  <li><b>Evaluate</b> models with the right metric: RMSE/MAE, confusion matrices, sensitivity/specificity, ROC/AUC and lift. Explain why accuracy can mislead on imbalanced data.</li>
+  <li><b>Reduce dimension</b> with variable selection, regularization and PCA, and explain the trade-offs.</li>
+  <li><b>Discover structure</b> without labels using hierarchical and k-means clustering, association rules and collaborative filtering.</li>
+  <li><b>Communicate</b> an end-to-end analysis in a reproducible report and an oral presentation.</li>
+</ol>
+
+<h2 id="prereq">Prerequisites</h2>
+<p>An introductory statistics course that covers regression, plus some programming experience in R or Python. [Insert the official catalog prerequisites — TBD.] You do <em>not</em> need to know both languages: every lecture shows each step in R and in Python, and you may submit in either.</p>
+
+<h2 id="materials">Materials &amp; software</h2>
+<h3>Textbook</h3>
+<ul>
+  <li><b>Required (choose the edition for your language):</b> <span data-c="textbook.main"></span> <em>or</em> <span data-c="textbook.python"></span></li>
+  <li><b>Optional:</b> <span data-c="textbook.optional"></span></li>
+</ul>
+<h3>Software (free)</h3>
+<ul>
+  <li><b>R track:</b> R ≥ 4.3 and RStudio (or Positron). Packages: <code>tidyverse</code>, <code>caret</code>, <code>glmnet</code>, <code>rpart</code>, <code>rpart.plot</code>, <code>nnet</code>, <code>randomForest</code>, <code>gbm</code>, <code>pROC</code>, <code>arules</code>, <code>recommenderlab</code>.</li>
+  <li><b>Python track:</b> Python ≥ 3.10 with Jupyter or VS Code. Packages: <code>pandas</code>, <code>numpy</code>, <code>scikit-learn</code>, <code>matplotlib</code>, <code>statsmodels</code>, <code>imbalanced-learn</code>, <code>mlxtend</code>.</li>
+  <li>The setup guide and all course datasets are on the <a href="resources.html">Resources</a> page.</li>
+</ul>
+
+<h2 id="rhythm">How a typical week runs</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>When</th><th>What</th></tr></thead>
+  <tbody>
+    <tr><td><b>Before Tuesday</b></td><td>Skim the lecture’s companion page and the textbook section. Do the “Predict, then reveal” questions; it is fine to get them wrong.</td></tr>
+    <tr><td><b>Tuesday</b></td><td>Concepts, worked examples and the interactive demo, with discussion.</td></tr>
+    <tr><td><b>Thursday</b></td><td>Hands-on lab: the code walk on a real dataset in R or Python. Bring a laptop.</td></tr>
+    <tr><td><b>Thursday – Sunday</b></td><td>Weekly practice quiz on <span data-c="lms.name"></span> (due Sunday 11:59 PM). Work on the current homework.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="grading">Grading</h2>
+<div class="weightbar" aria-hidden="true"></div><div class="legend"></div>
+<div class="two-col" style="margin-top:14px">
+  <div class="table-wrap"><table><thead><tr><th>Component</th><th class="num">Weight</th></tr></thead><tbody data-grading-table></tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>Letter grade</th><th class="num">Final percentage</th></tr></thead><tbody data-scale-table></tbody></table></div>
+</div>
+<p class="muted small">Cutoffs may be lowered at the instructor’s discretion but will never be raised. Grades are posted on <span data-c="lms.name"></span>; please raise any grading question within one week of a grade being returned.</p>
+
+<h2 id="components">Graded work</h2>
+<h3>Homework (25%)</h3>
+<p>Five problem sets, one per unit, combining short conceptual questions with a data analysis. Submit one PDF or HTML report (rendered R Markdown/Quarto or a Jupyter notebook) <em>and</em> your source file on <span data-c="lms.name"></span>. Code that does not run, or results that cannot be reproduced from your file, earn partial credit at best. Deadlines are on the <a href="assignments.html">Assignments</a> page.</p>
+<h3>Weekly practice quizzes (10%)</h3>
+<p>Twelve short quizzes on <span data-c="lms.name"></span>, each open Thursday through Sunday 11:59 PM. Two attempts are allowed and the higher score counts. Your lowest two quiz scores are dropped, which covers illness, travel and busy weeks, so there are no make-ups.</p>
+<h3>Midterm exams (2 × 20%)</h3>
+<ul data-exams></ul>
+<p>Exams are in class and closed-book, with one handwritten two-sided 8.5×11″ formula sheet allowed. They test concepts, interpreting software output and choosing methods. You will not write code from memory.</p>
+<h3>Team project (25%)</h3>
+<p>In teams of 3–4, you will take a real dataset of your choice from question to recommendation: exploration, at least three modeling approaches compared on held-out data, and a clear conclusion. Milestones are a proposal (3%), a progress report with EDA and a baseline (4%), a 12-minute presentation (6%), a final report with reproducible code (10%) and a peer evaluation (2%). Individual project grades may be adjusted based on the peer evaluation.</p>
+
+<h2 id="late">Late work &amp; make-ups</h2>
+<ul>
+  <li><b>Homework:</b> each student has <b>three grace days</b> for the semester, usable on homework only (at most two on any one assignment). After that, late homework loses 10% per day and is not accepted more than three days late. Grace days are applied automatically.</li>
+  <li><b>Project milestones:</b> one day late −10%; not accepted after two days (except the final report, which cannot be late because grades are due).</li>
+  <li><b>Exams:</b> a make-up is offered only for documented emergencies, university-sanctioned activities or religious observances, arranged <em>before</em> the exam whenever possible.</li>
+  <li>If something serious is affecting your work, talk to the instructor early. We can usually make a plan before things snowball.</li>
+</ul>
+
+<h2 id="attendance">Attendance &amp; participation</h2>
+<p>Attendance is not graded directly, but the Thursday labs are where most homework skills are practised, and exams draw on the in-class examples. If you miss a class, work through that lecture’s companion page, which is designed to stand on its own.</p>
+
+<h2 id="integrity">Academic honesty &amp; generative AI</h2>
+<p>All work must follow the BGSU Code of Academic Conduct. You are encouraged to <b>discuss</b> homework ideas with classmates, but what you submit (writing, code and figures) must be your own, and you must list anyone you discussed it with. Copying code or text from another student, past solutions or online sources without citation is a violation. Suspected violations are handled through the university’s academic honesty process.</p>
+<div class="callout key"><span class="ct">Generative AI policy</span>
+<p>You may use AI assistants (e.g. Claude, ChatGPT, Copilot) to <b>explain concepts, debug errors and look up syntax</b>, as you would use documentation. You may <b>not</b> use them to write your answers, interpretations or reports, or on exams and quizzes. If you use AI on an assignment, add a short note saying what you asked and how you used the answer. You are responsible for every line you submit: if you cannot explain it, it is not your work. [Instructor may adjust — TBD.]</p></div>
+
+<h2 id="access">Accessibility &amp; accommodations</h2>
+<p>BGSU is committed to equal access. If you have a disability and need accommodations, please register with the Office of Accessibility Services and share your accommodation letter with the instructor as early as possible so arrangements can be made, especially for exams. Every companion page on this site supports keyboard navigation, dark mode, screen-reader labels and zoom.</p>
+
+<h2 id="wellbeing">Support &amp; well-being</h2>
+<p>Your health matters more than any deadline. BGSU offers free, confidential support through the Counseling Center and other student-support offices; links are collected on <span data-c="lms.name"></span>. Instructors are responsible employees under Title IX and must share reports of sexual misconduct with the Title IX office. Confidential resources are available on campus.</p>
+
+<h2 id="comms">Communication</h2>
+<ul>
+  <li>Announcements go out on <span data-c="lms.name"></span>; please make sure notifications are on.</li>
+  <li>Post questions about course content on the <span data-c="lms.name"></span> discussion board so everyone benefits. Email is for personal matters; please put “<span data-c="code"></span>” in the subject line. Expect a reply within one business day.</li>
+  <li>Office hours are for anything: homework, project ideas, career questions or a concept that will not click.</li>
+</ul>
+
+<h2 id="changes">Changes to this syllabus</h2>
+<p>The schedule and policies may be adjusted if needed (for example, weather closures). Changes are announced in class and on <span data-c="lms.name"></span>, and this page is updated accordingly.</p>
+</div>
+</div>
+</div>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/course-config.js"></script>
+<script src="assets/js/schedule-data.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/pages.js"></script>
+</body>
+</html>

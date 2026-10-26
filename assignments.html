@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assignments & Deadlines · Data Mining · Spring 2027</title>
+<meta name="description" content="Homework, quizzes, exams and project milestones for Data Mining, Spring 2027.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="assignments" data-root="">
+<div id="site-header"></div>
+<main id="main">
+<div class="wrap">
+<header class="page-head">
+  <span class="eyebrow">Spring 2027</span>
+  <h1>Assignments &amp; deadlines</h1>
+  <p class="lede">Every graded item, its release date, deadline and weight. Submit everything on <span data-c="lms.name"></span>. Unless noted, deadlines are <b>11:59 PM Eastern</b>.</p>
+  <div class="cta"><button class="btn sm" id="icsBtn">Add deadlines to my calendar (.ics)</button><a class="btn sm ghost" href="syllabus.html#late">Late-work policy</a></div>
+</header>
+
+<div class="table-wrap"><table>
+  <thead><tr><th>ID</th><th>Item</th><th>Released</th><th>Due</th><th class="num">Weight</th><th>Status</th></tr></thead>
+  <tbody id="dueTable"></tbody>
+</table></div>
+
+<div class="sec-head"><div><h2>How grades add up</h2></div></div>
+<div class="weightbar" aria-hidden="true"></div><div class="legend"></div>
+
+<div class="sec-head"><div><h2>Homework</h2><p>Five problem sets, 5% each. Submit a rendered report (PDF/HTML) plus your <code>.Rmd</code>/<code>.qmd</code> or <code>.ipynb</code>.</p></div></div>
+<div class="grid c2">
+  <div class="card" id="HW1"><span class="pill">HW1 · Lectures 1–3</span><h3>Exploration, regression &amp; partitioning</h3><p class="muted">West Roxbury housing: EDA with at least three informative plots; multiple linear regression for <code>TOTAL VALUE</code>; train/validation split; RMSE and MAE; a short paragraph on what the model can and cannot be used for.</p></div>
+  <div class="card" id="HW2"><span class="pill">HW2 · Lectures 4–5</span><h3>Logistic regression &amp; classifier evaluation</h3><p class="muted">Universal Bank: model personal-loan acceptance, interpret odds ratios, build confusion matrices at cutoffs of 0.5 and 0.2, and draw ROC and lift charts. Recommend a cutoff for a marketing campaign and justify it.</p></div>
+  <div class="card" id="HW3"><span class="pill">HW3 · Lectures 6–7</span><h3>Variable selection, regularization &amp; PCA</h3><p class="muted">Toyota Corolla: compare stepwise selection, ridge, lasso and elastic net using cross-validated RMSE. Cereals: run PCA with and without scaling, read the loadings and decide how many components to keep.</p></div>
+  <div class="card" id="HW4"><span class="pill">HW4 · Lectures 8–10</span><h3>kNN, trees &amp; neural networks</h3><p class="muted">One classification problem, three models: tune k by cross-validation, prune a tree and extract its rules, and tune a single-hidden-layer network (size and decay). Compare all three on the same test set.</p></div>
+  <div class="card" id="HW5"><span class="pill">HW5 · Lectures 11–13</span><h3>Ensembles, rare events &amp; clustering</h3><p class="muted">Random forest and boosting with variable importance; an imbalanced-class problem handled with oversampling and a cost-based cutoff; hierarchical and k-means clustering of the Utilities data with cluster profiles.</p></div>
+  <div class="card" id="PQ"><span class="pill">Practice quizzes · weekly</span><h3>12 quizzes, lowest 2 dropped</h3><p class="muted">Open Thursday after class and due Sunday 11:59 PM on <span data-c="lms.name"></span>. Ten minutes, two attempts, higher score kept. The “Check yourself” section of each lecture page is good practice.</p></div>
+</div>
+
+<div class="sec-head"><div><h2>Exams</h2></div></div>
+<div class="grid c2">
+  <div class="card" id="MT1"><span class="pill exam">Thu Feb 25 · in class</span><h3>Midterm Exam 1 (20%)</h3><p class="muted">Lectures 1–7: the data-mining process, linear and logistic regression, partitioning and performance metrics, variable selection, regularization and PCA. Review session on Tue Feb 23.</p></div>
+  <div class="card" id="MT2"><span class="pill exam">Tue Apr 20 · in class</span><h3>Midterm Exam 2 (20%)</h3><p class="muted">Lectures 8–14: kNN, trees, neural networks, ensembles, rare events, clustering, association rules and collaborative filtering. Not cumulative, but it assumes the Lecture 3 and 5 evaluation tools.</p></div>
+</div>
+<p class="muted small">One handwritten two-sided 8.5×11″ formula sheet allowed. Bring a basic calculator.</p>
+
+<div class="sec-head" id="project"><div><h2>Team project (25%)</h2><p>Teams of 3–4. Pick a dataset you care about and take it from question to recommendation.</p></div></div>
+<div class="table-wrap"><table>
+  <thead><tr><th>Milestone</th><th>Due</th><th>What to submit</th><th class="num">Weight</th></tr></thead>
+  <tbody>
+    <tr id="P0"><td><b>P0 · Team &amp; idea</b></td><td>Sun Jan 31</td><td>Team members and one or two candidate datasets (with links).</td><td class="num">—</td></tr>
+    <tr id="P1"><td><b>P1 · Proposal</b></td><td>Fri Feb 19</td><td>Two pages: the question, data source and size, the outcome variable, why it matters, and a planned evaluation metric.</td><td class="num">3%</td></tr>
+    <tr id="P2"><td><b>P2 · Progress report</b></td><td>Fri Apr 2</td><td>Cleaned data, EDA (4–6 figures), a partitioning plan and one baseline model with held-out performance.</td><td class="num">4%</td></tr>
+    <tr id="P3"><td><b>P3 · Presentation</b></td><td>Thu Apr 22 / final-exam slot</td><td>12 minutes + 3 minutes Q&amp;A. Every member presents. Aim for a non-technical manager as the audience.</td><td class="num">6%</td></tr>
+    <tr id="P4"><td><b>P4 · Final report + code</b></td><td>Wed Apr 28</td><td>8–12 pages: at least three methods compared on a test set, a final recommendation and limitations. Code must reproduce every number.</td><td class="num">10%</td></tr>
+    <tr id="P5"><td><b>P5 · Peer evaluation</b></td><td>Wed Apr 28</td><td>Confidential rating of each teammate’s contribution.</td><td class="num">2%</td></tr>
+  </tbody>
+</table></div>
+<div class="callout"><span class="ct">Dataset ideas</span><p>UCI Machine Learning Repository, Kaggle, data.gov, the CDC, the City of Toledo open data portal, or your own research data (with permission). As a reference point, a 2023 team compared kNN, a pruned tree, a neural network and a random forest on the Wisconsin Diagnostic Breast Cancer data; the neural net had the best test accuracy (0.977). Aim for a dataset with at least ~500 rows and a clear outcome to predict.</p></div>
+
+<div class="sec-head"><div><h2>Submission checklist</h2></div></div>
+<div class="card"><ol style="margin:0;padding-left:1.2em">
+  <li>Name, assignment ID and the people you discussed it with at the top.</li>
+  <li><code>set.seed()</code> / <code>random_state</code> set before every random step.</li>
+  <li>Every figure has a title, axis labels and units.</li>
+  <li>Every number in your text appears in your output, so it is reproducible.</li>
+  <li>An AI-use note, if you used an AI assistant (see the <a href="syllabus.html#integrity">policy</a>).</li>
+  <li>Both the rendered report and the source file are uploaded.</li>
+</ol></div>
+</div>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/course-config.js"></script>
+<script src="assets/js/schedule-data.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/pages.js"></script>
+</body>
+</html>

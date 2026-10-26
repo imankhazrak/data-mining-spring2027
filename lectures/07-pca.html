@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L07 · Principal Component Analysis · Data Mining</title>
+<meta name="description" content="Principal component analysis for dimension reduction: variance, rotation, standardisation, scree plots, loadings and PCA as a preprocessing step, with breakfast-cereal nutrition data.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="7">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Principal Component Analysis</h1>
+  <p class="lede">Thirteen nutrition variables, many of them saying the same thing. PCA rotates the data so that a few new axes carry most of the information. It is a lens for exploring structure and a way to feed fewer, uncorrelated inputs to a model.</p>
+  <div class="lec-meta"><span class="pill">~70 min</span><span class="pill">Textbook ch. 4.8</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"s","label":"Variable selection (L6)","x":115,"y":50,"state":"prev","href":"L6"},
+ {"id":"v","label":"Variance = information","x":330,"y":50,"state":"today","href":"#idea"},
+ {"id":"r","label":"Rotate to PCs","x":530,"y":50,"state":"today","href":"#rotate"},
+ {"id":"sc","label":"Scaling matters","x":220,"y":150,"state":"today","href":"#scale"},
+ {"id":"k","label":"How many PCs?","x":430,"y":150,"state":"today","href":"#howmany"},
+ {"id":"u","label":"Clustering (L13)","x":650,"y":205,"state":"later","href":"L13"},
+ {"id":"m","label":"PCs as model inputs","x":640,"y":120,"state":"today","href":"#use"}],
+ "edges":[["s","v","another way to reduce"],["v","r"],["r","sc"],["r","k"],["k","m"],["sc","u"]]}'></div>
+</section>
+
+<section class="lsec" id="idea">
+<h2>The idea: keep the directions that vary</h2>
+<p>When predictors are correlated, the data occupy a thinner region of space than the number of variables suggests. PCA finds new variables, the <b>principal components</b> (PCs), that are:</p>
+<ol>
+  <li><b>linear combinations</b> of the original (usually standardised) variables: \(\text{PC}_1 = a_{11}x_1 + a_{12}x_2 + \cdots + a_{1p}x_p\);</li>
+  <li><b>uncorrelated</b> with one another (orthogonal directions);</li>
+  <li><b>ordered</b> by the variance they capture: PC1 the most, PC2 the most of what is left, and so on.</li>
+</ol>
+<p>The weights \(a_{1j}\) are the <b>loadings</b>; the values of the PCs for each record are the <b>scores</b>. With p variables there are p PCs, and together they hold 100% of the variance. The point is that the first few often hold most of it.</p>
+</section>
+
+<section class="lsec" id="rotate">
+<h2>Finding PC1 by rotating an axis</h2>
+<div class="demo">
+  <div class="dh"><b>Rotate the axis to capture variance</b><span class="muted small">77 cereals · calories vs. consumer rating (standardised)</span></div>
+  <div class="db">
+    <canvas id="pcaCanvas" aria-label="Scatter plot with a rotatable projection axis"></canvas>
+    <div class="controls">
+      <label>Axis angle <input type="range" id="ang" min="0" max="179" value="20"><output id="angV"></output></label>
+      <button class="btn sm primary" id="snap">Snap to PC1</button>
+      <label><input type="checkbox" id="proj" checked> show projections</label>
+    </div>
+    <div class="stats" id="pcaStats"></div>
+    <p class="hint">Each point drops a perpendicular onto the orange axis. The spread of those projected points is the variance this axis captures. PC1 is the angle that maximises it, which is also the angle that minimises the total squared perpendicular distance. PC2 is then forced to be perpendicular to PC1.</p>
+  </div>
+</div>
+<div class="predict" data-answer="b">
+  <div class="q">Calories and rating have correlation −0.69. With both standardised, roughly what share of total variance can PC1 capture?</div>
+  <div class="opts"><button class="opt">50%: it’s one of two variables</button><button class="opt">About 85%</button><button class="opt">100%</button><button class="opt">31%</button></div>
+  <div class="reveal"><p><b>About 85%.</b> For two standardised variables, PC1 captures (1 + |r|)/2 = (1 + 0.69)/2 ≈ 0.845. The stronger the correlation, the closer to 100%: one axis describes both.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="scale">
+<h2>Scaling changes everything</h2>
+<p>PCA maximises variance, so a variable measured on a large scale dominates. In the raw cereal data, sodium (variance ≈ 6,850) and potassium (≈ 5,020) dwarf fat (≈ 1):</p>
+<div class="demo">
+  <div class="dh"><b>Raw vs. standardised PCA on all 13 variables</b></div>
+  <div class="db">
+    <canvas id="screeCanvas" aria-label="Scree plots for raw and standardised PCA"></canvas>
+    <div class="controls"><div class="seg" role="group"><button data-sc="raw" aria-pressed="true">Raw units</button><button data-sc="std" aria-pressed="false">Standardised</button></div></div>
+    <p class="hint">Raw: PC1 (54%) is essentially <b>sodium</b> (loading 0.98) and PC2 (39%) is <b>potassium</b> (0.99). PCA has just found the two biggest numbers, not structure. Standardised: the variance is spread over several meaningful components.</p>
+  </div>
+</div>
+<div class="callout key"><span class="ct">Rule of thumb</span><p>Standardise (use the correlation matrix) whenever variables are in different units, which is almost always in data mining. Use raw covariance only when all variables share a unit and their scale differences are meaningful.</p></div>
+</section>
+
+<section class="lsec" id="howmany">
+<h2>How many components? Reading loadings</h2>
+<ul>
+  <li><b>Cumulative variance:</b> keep enough PCs to reach, say, 80–90%. On the standardised cereals, 5 PCs reach 82% and 7 reach 93%.</li>
+  <li><b>Scree plot elbow:</b> stop where the bars flatten.</li>
+  <li><b>Usefulness downstream:</b> if PCs feed a model, choose the number by cross-validated error, like any tuning parameter.</li>
+</ul>
+<p>Standardised loadings for the first two PCs give them meaning:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Variable</th><th class="num">PC1</th><th class="num">PC2</th></tr></thead>
+<tbody>
+<tr><td>fiber</td><td class="num"><b>+0.45</b></td><td class="num">+0.18</td></tr>
+<tr><td>rating</td><td class="num"><b>+0.44</b></td><td class="num">−0.25</td></tr>
+<tr><td>potass</td><td class="num"><b>+0.40</b></td><td class="num">+0.30</td></tr>
+<tr><td>protein</td><td class="num">+0.31</td><td class="num">+0.17</td></tr>
+<tr><td>calories</td><td class="num">−0.30</td><td class="num"><b>+0.39</b></td></tr>
+<tr><td>sugars</td><td class="num">−0.23</td><td class="num"><b>+0.35</b></td></tr>
+<tr><td>weight</td><td class="num">−0.05</td><td class="num"><b>+0.45</b></td></tr>
+<tr><td>fat</td><td class="num">−0.04</td><td class="num"><b>+0.35</b></td></tr>
+</tbody></table></div>
+<p>PC1 contrasts <em>wholesome</em> cereals (fiber, potassium, protein, high rating) with sugary ones; call it a “healthiness” axis. PC2 loads on calories, weight, fat and sugar: a “heaviness / energy per serving” axis.</p>
+<div class="predict" data-answer="c">
+  <div class="q">In your R output, all PC1 loadings have the opposite sign to the table above. What went wrong?</div>
+  <div class="opts"><button class="opt">You forgot to standardise</button><button class="opt">R uses a different definition of PCA</button><button class="opt">Nothing: the sign of a component is arbitrary; flipping every loading describes the same axis</button></div>
+  <div class="reveal"><p><b>C.</b> An axis pointing “up” and one pointing “down” are the same line. Interpret the <em>pattern</em> of signs within a component, never the overall sign.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="use">
+<h2>Using PCA in a data-mining pipeline</h2>
+<ul>
+  <li><b>Exploration:</b> plot PC1 vs. PC2 scores to see clusters, outliers and gradients (try it in the code walk).</li>
+  <li><b>Preprocessing:</b> replace many correlated predictors with a few PCs in regression (“principal components regression”), kNN or clustering.</li>
+  <li><b>Trade-off:</b> PCs are uncorrelated and compact, but harder to interpret, and PCA ignores the outcome, so the highest-variance directions are not guaranteed to be the most predictive.</li>
+</ul>
+<div class="callout warn"><span class="ct">No peeking</span><p>Fit the scaler and the PCA rotation on the <b>training</b> data, then apply the same transformation to validation and test data. Fitting PCA on everything leaks information.</p></div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: PCA on breakfast cereals</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/Cereals.csv" download>Cereals.csv</a>: 77 cereals, 13 numeric variables (3 have missing values).</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Prepare</h3>
+<pre class="code r">
+cereals <- read.csv("data/Cereals.csv")
+num <- na.omit(cereals[, -(1:3)])        # drop name, mfr, type; 74 complete rows
+round(apply(num, 2, var))                # wildly different scales
+</pre>
+<pre class="code py">
+import pandas as pd, numpy as np
+cereals = pd.read_csv("data/Cereals.csv")
+num = cereals.drop(columns=["name", "mfr", "type"]).dropna()   # 74 complete rows
+print(num.var().round(0))                 # wildly different scales
+</pre>
+</div>
+<div class="step" data-step="2"><h3>Raw vs. standardised PCA</h3>
+<pre class="code r">
+pca_raw <- prcomp(num)                   # covariance-based
+pca_std <- prcomp(num, scale. = TRUE)    # correlation-based
+summary(pca_raw)$importance[2, 1:3]      # PC1 ~0.54 (sodium!), PC2 ~0.39 (potassium!)
+summary(pca_std)                          # proportion and cumulative variance
+round(pca_std$rotation[, 1:2], 2)         # loadings
+screeplot(pca_std, type = "lines")
+</pre>
+<pre class="code py">
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+pca_raw = PCA().fit(num)
+pca_std = PCA().fit(StandardScaler().fit_transform(num))
+print(pca_raw.explained_variance_ratio_[:3].round(3))         # [0.54 0.387 0.039]
+print(np.cumsum(pca_std.explained_variance_ratio_).round(3))   # 0.28, 0.52, 0.67, ...
+loadings = pd.DataFrame(pca_std.components_[:2].T, index=num.columns, columns=["PC1", "PC2"])
+print(loadings.round(2))
+</pre>
+<div class="see"><b>What you should see:</b> standardised PC1 explains 28% and PC2 24%; five components pass 80%. Signs may be flipped relative to this page.</div>
+</div>
+<div class="step" data-step="3"><h3>Plot the scores</h3>
+<pre class="code r">
+scores <- as.data.frame(pca_std$x[, 1:2])
+scores$name <- cereals$name[as.numeric(rownames(num))]
+library(ggplot2)
+ggplot(scores, aes(PC1, PC2, label = name)) + geom_point() +
+  geom_text(size = 2.5, vjust = -0.6, check_overlap = TRUE)
+biplot(pca_std, cex = 0.6)                # scores + loading arrows
+</pre>
+<pre class="code py">
+import matplotlib.pyplot as plt
+scores = pca_std.transform(StandardScaler().fit_transform(num))[:, :2]
+names = cereals.loc[num.index, "name"]
+plt.figure(figsize=(9, 7)); plt.scatter(scores[:, 0], scores[:, 1], s=12)
+for (x, y), n in zip(scores, names): plt.annotate(n, (x, y), fontsize=6)
+plt.xlabel("PC1 (healthiness)"); plt.ylabel("PC2 (heaviness)"); plt.show()
+</pre>
+<div class="see"><b>What you should see:</b> 100% Bran and All-Bran with Extra Fiber far out on the high-fiber end of PC1; sugary kids’ cereals at the other end.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Not standardising</b> mixed-unit variables, so PCA “discovers” the largest unit.</li>
+  <li><b>Interpreting the overall sign</b> of a component.</li>
+  <li><b>Including the outcome</b> in PCA before modelling. That is leakage.</li>
+  <li><b>Fitting PCA on all the data</b> instead of the training data.</li>
+  <li><b>Running PCA on categorical codes.</b> PCA is for numeric variables; dummies work but are awkward to interpret.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="c"><div class="q">Principal components are…</div><div class="opts"><button class="opt">a subset of the original variables</button><button class="opt">clusters of records</button><button class="opt">uncorrelated linear combinations of the original variables, ordered by variance</button><button class="opt">the outcome variable rotated</button></div><div class="why">PCA rotates the variable space.</div></div>
+  <div class="qq" data-answer="a"><div class="q">In raw-unit PCA of the cereals, PC1 is almost entirely sodium because…</div><div class="opts"><button class="opt">sodium has by far the largest variance in its units</button><button class="opt">sodium is the most important nutrient</button><button class="opt">sodium is listed first</button><button class="opt">sodium is correlated with rating</button></div><div class="why">Covariance-based PCA follows raw variance.</div></div>
+  <div class="qq" data-answer="d"><div class="q">With p = 13 standardised variables, the PC variances (eigenvalues) sum to…</div><div class="opts"><button class="opt">1</button><button class="opt">100</button><button class="opt">it depends on n</button><button class="opt">13</button></div><div class="why">Each standardised variable has variance 1; PCA redistributes the total of 13.</div></div>
+  <div class="qq" data-answer="b"><div class="q">A key weakness of PCA as preprocessing for prediction is that…</div><div class="opts"><button class="opt">PCs are correlated</button><button class="opt">it ignores the outcome, so high-variance directions may not be predictive</button><button class="opt">it only works with two variables</button><button class="opt">it always increases dimension</button></div><div class="why">PCA is unsupervised.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Two standardised variables have r = 0.9. PC1 explains about…</div><div class="opts"><button class="opt">50%</button><button class="opt">90%</button><button class="opt">95%</button><button class="opt">81%</button></div><div class="why">(1 + 0.9)/2 = 0.95.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w07.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

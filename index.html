@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Data Mining · Spring 2027</title>
+<meta name="description" content="Course website for Data Mining (Spring 2027): syllabus, schedule, deadlines and interactive lecture companion pages in R and Python.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="home" data-root="">
+<div id="site-header"></div>
+<main id="main">
+<section class="hero"><div class="wrap hero-grid">
+  <div>
+    <span class="eyebrow"><span data-c="code"></span> · <span data-c="term"></span></span>
+    <h1>Data Mining</h1>
+    <p class="lede">Learn to find patterns in data and turn them into predictions you can defend: regression and classification, trees, neural networks and ensembles, then clustering and recommendation systems. Every lecture comes with an interactive companion page and code in both <b>R</b> and <b>Python</b>.</p>
+    <div class="cta">
+      <a class="btn primary" href="#lectures">Browse lectures</a>
+      <a class="btn" href="syllabus.html">Read the syllabus</a>
+      <a class="btn ghost" href="schedule.html">Schedule &amp; dates</a>
+    </div>
+  </div>
+  <div class="hero-art"><canvas id="heroCanvas" aria-label="Animated scatter of points settling into three clusters. Click to replay." role="img"></canvas></div>
+</div></section>
+
+<div class="wrap">
+  <dl class="facts">
+    <div><dt>Instructor</dt><dd data-c="instructor.name"></dd></div>
+    <div><dt>Meets</dt><dd><span data-c="meeting.days"></span><br><span class="muted" data-c="meeting.time"></span></dd></div>
+    <div><dt>Room</dt><dd data-c="meeting.room"></dd></div>
+    <div><dt>Office hours</dt><dd data-c="instructor.officeHours"></dd></div>
+  </dl>
+
+  <div class="sec-head"><div><h2>Coming up</h2><p>Updates automatically from the course calendar.</p></div><a class="btn sm" href="schedule.html">Full schedule →</a></div>
+  <div class="next-up" id="nextUp"></div>
+
+  <div class="sec-head" id="lectures"><div><h2>Lectures</h2><p>14 interactive companion pages, grouped into five modules. Your progress is saved in this browser only.</p></div></div>
+  <div id="lectureGrid"></div>
+
+  <div class="sec-head"><div><h2>How each lecture page works</h2><p>The same structure every week, so you always know where to look.</p></div></div>
+  <div class="grid c3">
+    <div class="card"><h3 style="margin-top:0">Concept map</h3><p class="muted" style="margin:0">Where today’s idea sits relative to what you have seen and what comes next. Click a node to jump to it.</p></div>
+    <div class="card"><h3 style="margin-top:0">Predict, then reveal</h3><p class="muted" style="margin:0">Commit to an answer before seeing the explanation. Guessing first, even wrongly, is what makes the idea stick.</p></div>
+    <div class="card"><h3 style="margin-top:0">Interactive demo</h3><p class="muted" style="margin:0">Drag points, move a cutoff, add trees, step through k-means. Watch the model react before writing any code.</p></div>
+    <div class="card"><h3 style="margin-top:0">Code walk in R &amp; Python</h3><p class="muted" style="margin:0">A step-by-step analysis of a real dataset. Switch languages with one click; your choice is remembered on every page.</p></div>
+    <div class="card"><h3 style="margin-top:0">Common pitfalls</h3><p class="muted" style="margin:0">The mistakes that show up on homework and exams, named in advance so you can avoid them.</p></div>
+    <div class="card"><h3 style="margin-top:0">Check yourself</h3><p class="muted" style="margin:0">A short ungraded quiz with explanations. Nothing is recorded; use it to decide whether to review.</p></div>
+  </div>
+
+  <div class="sec-head"><div><h2>Key university dates</h2><p>Official BGSU Spring 2027 calendar (15-week session). Dates are subject to change by the university.</p></div><a class="btn sm" href="https://www.bgsu.edu/registration-records/academic-calendars/spring-academic-calendar.html" target="_blank" rel="noopener">BGSU calendar ↗</a></div>
+  <div class="table-wrap"><table><tbody id="keyDates"></tbody></table></div>
+</div>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/course-config.js"></script>
+<script src="assets/js/schedule-data.js"></script>
+<script src="assets/js/site.js"></script>
+<script src="assets/js/pages.js"></script>
+</body>
+</html>

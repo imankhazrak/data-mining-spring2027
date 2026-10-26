@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L02 · Linear Regression for Prediction · Data Mining</title>
+<meta name="description" content="Multiple linear regression as a predictive tool: least squares, dummy variables, coefficient interpretation and residuals, with the Toyota Corolla data.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="2">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Linear Regression for Prediction</h1>
+  <p class="lede">Linear regression is the workhorse you already know, used here with a different goal. We will fit it by least squares, read its coefficients correctly, and judge it by how well it predicts cars it has never seen.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 6</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"e","label":"Explore & clean (L1)","x":110,"y":50,"state":"prev","href":"L1"},
+ {"id":"m","label":"Linear model","x":330,"y":50,"state":"today","href":"#model"},
+ {"id":"o","label":"Least squares","x":530,"y":50,"state":"today","href":"#ols"},
+ {"id":"i","label":"Interpret coefficients","x":250,"y":150,"state":"today","href":"#interpret"},
+ {"id":"r","label":"Residuals","x":470,"y":150,"state":"today","href":"#resid"},
+ {"id":"v","label":"Judge on new data (L3)","x":660,"y":150,"state":"later","href":"L3"},
+ {"id":"s","label":"Select variables (L6)","x":660,"y":205,"state":"later","href":"L6"}],
+ "edges":[["e","m"],["m","o"],["o","i"],["o","r"],["r","v"],["i","s"]]}'></div>
+</section>
+
+<section class="lsec" id="model">
+<h2>The model and two different goals</h2>
+<p>Multiple linear regression relates a numeric outcome to \(p\) predictors:</p>
+<div class="formula">\[ Y = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \cdots + \beta_p X_p + \varepsilon \]</div>
+<p>The same equation can serve two very different purposes, and the purpose decides what “good” means.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Explanatory modelling</th><th>Predictive modelling (this course)</th></tr></thead>
+<tbody>
+<tr><td><b>Goal</b></td><td>Understand how X affects Y in the population</td><td>Predict Y accurately for new individual records</td></tr>
+<tr><td><b>Data used for fit</b></td><td>All of it</td><td>Training set only; validation set held out</td></tr>
+<tr><td><b>Judged by</b></td><td>Goodness of fit, significance, assumptions</td><td>Error on the validation set (RMSE, MAE)</td></tr>
+<tr><td><b>Multicollinearity</b></td><td>A serious problem (unstable β)</td><td>Tolerable if predictions are accurate</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="lsec" id="ols">
+<h2>Least squares, by hand and by algorithm</h2>
+<p>Ordinary least squares (OLS) chooses the coefficients \(\hat\beta\) that minimize the sum of squared residuals, where each residual is the gap between an actual and a fitted value:</p>
+<div class="formula">\[ \text{SSE} = \sum_{i=1}^{n} (y_i - \hat y_i)^2, \qquad \hat\beta = (X^\top X)^{-1} X^\top y \]</div>
+<div class="demo">
+  <div class="dh"><b>Fit a line: drag, add, and beat least squares</b><span class="muted small">used cars: price vs. age</span></div>
+  <div class="db">
+    <canvas id="olsCanvas" aria-label="Interactive scatter plot with regression line"></canvas>
+    <div class="controls">
+      <label><input type="checkbox" id="olsSq"> show squared residuals</label>
+      <label><input type="checkbox" id="olsHand"> fit by hand</label>
+      <span id="handCtl" style="display:none;gap:14px;flex-wrap:wrap">
+        <label>intercept <input type="range" id="b0" min="10000" max="26000" step="100" value="18000"><output id="b0v"></output></label>
+        <label>slope <input type="range" id="b1" min="-300" max="0" step="2" value="-120"><output id="b1v"></output></label>
+      </span>
+      <button class="btn sm" id="olsOut">Add an outlier</button>
+      <button class="btn sm ghost" id="olsReset">Reset</button>
+    </div>
+    <div class="stats" id="olsStats"></div>
+    <p class="hint">Drag any point. Click empty space to add a point; Shift-click a point to remove it. Turn on “fit by hand” and try to get your SSE below the OLS line’s. You can’t: that is the definition of least squares.</p>
+  </div>
+</div>
+<div class="predict" data-answer="c">
+  <div class="q">Add one outlier far from the others at a very old age (top-right of the plot). What happens to the OLS line?</div>
+  <div class="opts"><button class="opt">Nothing: OLS ignores outliers</button><button class="opt">It shifts up slightly but keeps its slope</button><button class="opt">It tilts noticeably toward the outlier, because squaring makes large residuals dominate</button></div>
+  <div class="reveal"><p><b>C.</b> Squaring gives a point twice as far away four times the influence. A point that is extreme in X (<b>high leverage</b>) <em>and</em> far from the trend can drag the whole line. Try it in the demo. This is one reason we explore before modelling.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="interpret">
+<h2>Reading the coefficients</h2>
+<p>Fitting <code>Price</code> on ten predictors for 600 training cars gives coefficients like these (exact values depend on the random split):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Predictor</th><th class="num">Estimate</th><th>Reading</th></tr></thead>
+<tbody>
+<tr><td><code>Age_08_04</code> (months)</td><td class="num">≈ −141</td><td>Each extra month of age lowers the predicted price by about €141, <em>holding the other predictors fixed</em>.</td></tr>
+<tr><td><code>KM</code></td><td class="num">≈ −0.018</td><td>10,000 more km → about €180 lower.</td></tr>
+<tr><td><code>HP</code></td><td class="num">≈ +36</td><td>Each horsepower adds about €36.</td></tr>
+<tr><td><code>Fuel_Type: Petrol</code></td><td class="num">≈ +2,300</td><td>Compared with the <b>reference level (CNG)</b>, a petrol car is predicted about €2,300 higher, all else equal.</td></tr>
+<tr><td><code>Weight</code> (kg)</td><td class="num">≈ +13</td><td>Heavier cars (more equipment) predicted higher.</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="a">
+  <div class="q">A colleague says: “The Doors coefficient is negative, so adding a door to a car <em>causes</em> its value to drop.” Is that a valid conclusion?</div>
+  <div class="opts"><button class="opt">No: this is observational data, and a coefficient measures an association adjusted for the other predictors, not a causal effect</button><button class="opt">Yes, because the other predictors are held constant</button><button class="opt">Yes, if the coefficient’s p-value is below 0.05</button></div>
+  <div class="reveal"><p><b>A.</b> “Holding others fixed” is a statement about the fitted equation, not about intervening in the world. Doors is correlated with body type, model and age in ways the model only partially captures. For prediction we don’t need causality; we just shouldn’t claim it.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="resid">
+<h2>Residuals and what to check</h2>
+<p>A residual \(e_i = y_i - \hat y_i\) is what the model got wrong. For predictive work we care less about textbook assumptions (normal errors, for instance) and more about <em>patterns</em> the model is missing:</p>
+<ul>
+  <li><b>Curvature</b> in residuals vs. fitted values → add a transformed term (log, square) or use a more flexible model.</li>
+  <li><b>Fanning out</b> (spread grows with fitted value) → try modelling \(\log(Y)\). Remember to back-transform predictions.</li>
+  <li><b>A few huge residuals</b> → errors in the data, or a segment the model does not fit (e.g. luxury trims).</li>
+</ul>
+<div class="callout key"><span class="ct">Key idea</span><p>Training-set R² and residual plots tell you about the <em>fit</em>. Whether the model <em>predicts</em> well is a separate question, answered on held-out data. That is next lecture’s topic, and we preview it in the code walk below.</p></div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: predicting used-car prices</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/ToyotaCorolla.csv" download>ToyotaCorolla.csv</a>, first 1,000 cars.</p><span class="lang-switch-slot"></span></div>
+
+<div class="step" data-step="1"><h3>Select predictors</h3>
+<pre class="code r">
+car <- read.csv("data/ToyotaCorolla.csv")[1:1000, ]
+preds <- c("Age_08_04", "KM", "Fuel_Type", "HP", "Met_Color", "Automatic",
+           "CC", "Doors", "Quarterly_Tax", "Weight")
+car <- car[, c("Price", preds)]
+car$Fuel_Type <- factor(car$Fuel_Type)      # CNG is the reference level
+</pre>
+<pre class="code py">
+import pandas as pd
+car = pd.read_csv("data/ToyotaCorolla.csv").iloc[:1000]
+preds = ["Age_08_04", "KM", "Fuel_Type", "HP", "Met_Color", "Automatic",
+         "CC", "Doors", "Quarterly_Tax", "Weight"]
+X = pd.get_dummies(car[preds], drop_first=True, dtype=int)   # CNG is the reference level
+y = car["Price"]
+</pre>
+</div>
+
+<div class="step" data-step="2"><h3>Partition 60 / 40</h3>
+<pre class="code r">
+set.seed(1)
+train_idx <- sample(nrow(car), 0.6 * nrow(car))
+train <- car[train_idx, ]
+valid <- car[-train_idx, ]
+</pre>
+<pre class="code py">
+from sklearn.model_selection import train_test_split
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1)
+</pre>
+</div>
+
+<div class="step" data-step="3"><h3>Fit by least squares and read the output</h3>
+<pre class="code r">
+fit <- lm(Price ~ ., data = train)
+summary(fit)          # coefficients, std. errors, R-squared
+</pre>
+<pre class="code py">
+from sklearn.linear_model import LinearRegression
+fit = LinearRegression().fit(X_train, y_train)
+print(pd.Series(fit.coef_, index=X.columns).round(3))
+print("intercept", round(fit.intercept_, 1), " train R2", round(fit.score(X_train, y_train), 3))
+</pre>
+<div class="see"><b>What you should see:</b> Age ≈ −140 per month, KM ≈ −0.018, HP ≈ +36, Petrol ≈ +2,300 vs. CNG; training R² ≈ 0.86. Your numbers will differ a little depending on the split.</div>
+</div>
+
+<div class="step" data-step="4"><h3>Predict cars the model has not seen</h3>
+<pre class="code r">
+pred <- predict(fit, newdata = valid)
+err  <- valid$Price - pred
+c(RMSE = sqrt(mean(err^2)), MAE = mean(abs(err)), MeanError = mean(err))
+hist(err, breaks = 30, main = "Validation residuals")
+</pre>
+<pre class="code py">
+import numpy as np
+pred = fit.predict(X_valid)
+err = y_valid - pred
+print({"RMSE": np.sqrt((err**2).mean()), "MAE": err.abs().mean(), "MeanError": err.mean()})
+err.plot.hist(bins=30, title="Validation residuals")
+</pre>
+<div class="see"><b>What you should see:</b> validation RMSE ≈ €1,300–1,400 and MAE ≈ €1,000, with a mean error near 0 (no systematic bias). Price averages about €11,900, so typical errors are around 9–11%.</div>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Reporting training R² as performance.</b> It is always optimistic; report validation RMSE/MAE.</li>
+  <li><b>Extrapolating.</b> The model knows cars 1–68 months old; don’t ask it about a brand-new car.</li>
+  <li><b>Forgetting the reference level.</b> A dummy coefficient is always relative to the omitted category.</li>
+  <li><b>Causal language</b> (“increasing HP will raise the price”) from observational data.</li>
+  <li><b>Mismatched categories.</b> If the validation set has a level that is missing from training, prediction fails. Set factor levels on the full data before splitting.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="b"><div class="q">OLS chooses coefficients that minimize…</div><div class="opts"><button class="opt">the sum of absolute residuals</button><button class="opt">the sum of squared residuals</button><button class="opt">the number of predictors</button><button class="opt">the validation RMSE</button></div><div class="why">Least squares minimizes SSE on the training data. Validation RMSE is how we <em>judge</em> it, not how it is fitted.</div></div>
+  <div class="qq" data-answer="c"><div class="q">The coefficient on <code>Fuel_Type: Diesel</code> is +1,066 with CNG as the reference. Interpretation?</div><div class="opts"><button class="opt">Diesel cars cost €1,066 on average</button><button class="opt">Diesel adds €1,066 relative to Petrol</button><button class="opt">Holding other predictors fixed, a diesel car is predicted €1,066 higher than a CNG car</button><button class="opt">Each extra litre of diesel adds €1,066</button></div><div class="why">Dummy coefficients compare a level to the reference level, adjusted for the other predictors.</div></div>
+  <div class="qq" data-answer="a"><div class="q">Residuals vs. fitted values fan out as fitted price grows. A sensible next step is to…</div><div class="opts"><button class="opt">Model log(Price)</button><button class="opt">Remove all high-priced cars</button><button class="opt">Add more dummy variables</button><button class="opt">Ignore it; OLS is unbiased</button></div><div class="why">Increasing spread (heteroscedasticity) often stabilises on the log scale.</div></div>
+  <div class="qq" data-answer="d"><div class="q">For <em>prediction</em>, strong multicollinearity among predictors is…</div><div class="opts"><button class="opt">Always fatal</button><button class="opt">Fixed by adding more predictors</button><button class="opt">Only a problem for the intercept</button><button class="opt">Tolerable if validation performance is good, though coefficients become unstable</button></div><div class="why">Collinearity inflates coefficient variance, which hurts explanation, but predictions can still be accurate within the range of the data.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Why is a point with an extreme X value and a large residual especially influential?</div><div class="opts"><button class="opt">It has more decimal places</button><button class="opt">Its squared residual is large, and its leverage lets it pull the line’s slope</button><button class="opt">OLS weights old cars more</button><button class="opt">It changes the reference category</button></div><div class="why">Leverage × residual size = influence.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w02.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L04 · Logistic Regression · Data Mining</title>
+<meta name="description" content="Logistic regression for classification: probability, odds and logit, maximum likelihood, odds ratios and cutoffs, with the Universal Bank loan data.">
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>try{var t=JSON.parse(localStorage.getItem('dm-theme'));if(t)document.documentElement.dataset.theme=t;document.documentElement.dataset.code=JSON.parse(localStorage.getItem('dm-code'))||'r'}catch(e){document.documentElement.dataset.code='r'}</script>
+</head>
+<body data-page="lecture" data-root="../" data-lecture="4">
+<div id="site-header"></div>
+<main id="main"><div class="wrap">
+<header class="lec-hero">
+  <div class="eyebrow"></div>
+  <h1>Logistic Regression</h1>
+  <p class="lede">When the outcome is yes/no, a straight line is the wrong tool: it predicts probabilities below 0 and above 1. Logistic regression bends the line into an S-curve, gives every customer a probability, and lets us decide where to draw the line between “offer” and “don’t”.</p>
+  <div class="lec-meta"><span class="pill">~75 min</span><span class="pill">Textbook ch. 10</span></div>
+</header>
+<details class="toc-inline"></details>
+<div class="lec-layout">
+<article class="lec-body">
+
+<section class="lsec" id="map">
+<h2>Concept map</h2>
+<div class="cmap" data-map='{"w":760,"h":230,"nodes":[
+ {"id":"lr","label":"Linear regression (L2)","x":110,"y":50,"state":"prev","href":"L2"},
+ {"id":"o","label":"Odds & logit","x":320,"y":50,"state":"today","href":"#odds"},
+ {"id":"m","label":"Maximum likelihood","x":530,"y":50,"state":"today","href":"#mle"},
+ {"id":"i","label":"Odds ratios","x":250,"y":150,"state":"today","href":"#interpret"},
+ {"id":"c","label":"Cutoff → class","x":460,"y":150,"state":"today","href":"#cutoff"},
+ {"id":"e","label":"Evaluate classifiers (L5)","x":640,"y":205,"state":"later","href":"L5"},
+ {"id":"n","label":"Neural nets (L10)","x":660,"y":110,"state":"later","href":"L10"}],
+ "edges":[["lr","o"],["o","m"],["m","i"],["m","c"],["c","e"],["m","n","stacked logits"]]}'></div>
+</section>
+
+<section class="lsec" id="odds">
+<h2>From probability to odds to logit</h2>
+<p>For a binary outcome we model \(p = P(Y = 1 \mid X)\). A linear model for \(p\) itself breaks the [0, 1] range, so we transform it twice:</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Scale</th><th>Definition</th><th>Range</th><th>p = 0.10</th><th>p = 0.50</th><th>p = 0.90</th></tr></thead>
+<tbody>
+<tr><td><b>Probability</b></td><td>\(p\)</td><td>0 to 1</td><td>0.10</td><td>0.50</td><td>0.90</td></tr>
+<tr><td><b>Odds</b></td><td>\(p/(1-p)\)</td><td>0 to ∞</td><td>0.11</td><td>1</td><td>9</td></tr>
+<tr><td><b>Logit</b> (log-odds)</td><td>\(\log\frac{p}{1-p}\)</td><td>−∞ to ∞</td><td>−2.20</td><td>0</td><td>2.20</td></tr>
+</tbody></table></div>
+<p>The logit can take any value, so it is safe to model it linearly. Solving back for \(p\) gives the logistic (S-shaped) function:</p>
+<div class="formula">\[ \log\frac{p}{1-p} = \beta_0 + \beta_1 x_1 + \cdots + \beta_q x_q \quad\Longleftrightarrow\quad p = \frac{1}{1 + e^{-(\beta_0 + \beta_1 x_1 + \cdots + \beta_q x_q)}} \]</div>
+<div class="predict" data-answer="b">
+  <div class="q">A customer has a predicted logit of 0. What is their predicted probability of accepting the loan?</div>
+  <div class="opts"><button class="opt">0</button><button class="opt">0.5</button><button class="opt">1</button><button class="opt">It depends on the intercept</button></div>
+  <div class="reveal"><p><b>0.5.</b> Logit 0 ⇔ odds 1 ⇔ even chance. Positive logits mean p &gt; 0.5; negative logits mean p &lt; 0.5.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="mle">
+<h2>Fitting by maximum likelihood</h2>
+<p>There is no closed-form least-squares answer here. Instead, logistic regression chooses the β’s that make the observed 0s and 1s <b>most probable</b>, maximising the log-likelihood</p>
+<div class="formula">\[ \ell(\beta) = \sum_{i=1}^n \big[\, y_i \log \hat p_i + (1-y_i)\log(1-\hat p_i) \,\big] \]</div>
+<p>Each 1 wants its \(\hat p_i\) near 1; each 0 wants its \(\hat p_i\) near 0. The software searches iteratively for the best compromise.</p>
+<div class="demo">
+  <div class="dh"><b>Shape the S-curve, then let MLE do it</b><span class="muted small">loan acceptance vs. income (simulated)</span></div>
+  <div class="db">
+    <canvas id="lgCanvas" aria-label="Logistic curve fitted to binary data"></canvas>
+    <div class="controls">
+      <label>β₀ <input type="range" id="lb0" min="-14" max="2" step="0.1" value="-3"><output id="lb0v"></output></label>
+      <label>β₁ (per $1k) <input type="range" id="lb1" min="-0.05" max="0.15" step="0.002" value="0.02"><output id="lb1v"></output></label>
+      <button class="btn sm primary" id="lgFit">Fit by MLE</button>
+      <label>cutoff <input type="range" id="lcut" min="0.05" max="0.95" step="0.05" value="0.5"><output id="lcutv"></output></label>
+    </div>
+    <div class="stats" id="lgStats"></div>
+    <p class="hint">Customers who accepted are plotted at the top (y = 1), the rest at the bottom (y = 0). Move β₁ and watch the log-likelihood: higher (closer to 0) is better. “Fit by MLE” runs gradient ascent from your current guess. The cutoff turns the curve into a decision: everyone right of the dashed line is classified “accept”.</p>
+  </div>
+</div>
+</section>
+
+<section class="lsec" id="interpret">
+<h2>Interpreting coefficients as odds ratios</h2>
+<p>A one-unit increase in \(x_j\) adds \(\beta_j\) to the logit, which <b>multiplies the odds</b> by \(e^{\beta_j}\). That multiplier is the <b>odds ratio</b>. Fitting on 3,000 training customers (Undergrad as the reference education level):</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Predictor</th><th class="num">β</th><th class="num">Odds ratio \(e^\beta\)</th><th>Reading (all else equal)</th></tr></thead>
+<tbody>
+<tr><td>Income ($000)</td><td class="num">0.059</td><td class="num">1.06</td><td>Each extra $1k of income multiplies the odds of acceptance by 1.06 (+6%).</td></tr>
+<tr><td>Family size</td><td class="num">0.62</td><td class="num">1.85</td><td>Each extra family member: odds × 1.85.</td></tr>
+<tr><td>CD Account (1/0)</td><td class="num">3.7</td><td class="num">≈ 40</td><td>Holders of a CD account have about 40× the odds of non-holders.</td></tr>
+<tr><td>Education: Graduate</td><td class="num">4.2</td><td class="num">≈ 69</td><td>vs. Undergrad. Education is a huge signal in this bank’s data.</td></tr>
+<tr><td>Online banking (1/0)</td><td class="num">−0.69</td><td class="num">0.50</td><td>Online users have about half the odds.</td></tr>
+</tbody></table></div>
+<div class="predict" data-answer="c">
+  <div class="q">The odds ratio for Income is 1.06. A customer’s probability of acceptance is 0.40. If their income rises by $1k, their new probability is…</div>
+  <div class="opts"><button class="opt">0.46: add 6 percentage points</button><button class="opt">0.424: multiply the probability by 1.06</button><button class="opt">about 0.414: the <em>odds</em> go from 0.667 to 0.707</button></div>
+  <div class="reveal"><p><b>C.</b> Odds = 0.4/0.6 = 0.667; × 1.06 = 0.707; p = 0.707/1.707 ≈ 0.414. Odds ratios act on odds, not on probabilities. The change in probability depends on where you start on the S-curve.</p></div>
+</div>
+<div class="callout warn"><span class="ct">Watch out: Age and Experience</span><p>These two have r ≈ 0.99 in this data. Their coefficients come out with <em>opposite signs</em> (≈ −0.03 and +0.03) that roughly cancel. That is multicollinearity: fine for prediction, meaningless for interpretation. Drop one if you want readable coefficients.</p></div>
+</section>
+
+<section class="lsec" id="cutoff">
+<h2>From probabilities to classes</h2>
+<p>The model outputs \(\hat p\). To act, we pick a <b>cutoff</b> c and classify “1” when \(\hat p \ge c\). The default 0.5 is rarely the best choice when classes are imbalanced (only 9.6% of customers accepted) or when the two kinds of mistakes cost different amounts.</p>
+<div class="two-col">
+<div class="table-wrap"><table class="cm-table"><thead><tr><th>cutoff 0.5</th><th>pred 0</th><th>pred 1</th></tr></thead><tbody><tr><th>actual 0</th><td class="tn">1,791</td><td class="fp">16</td></tr><tr><th>actual 1</th><td class="fn">65</td><td class="tp">128</td></tr></tbody></table></div>
+<div class="table-wrap"><table class="cm-table"><thead><tr><th>cutoff 0.2</th><th>pred 0</th><th>pred 1</th></tr></thead><tbody><tr><th>actual 0</th><td class="tn">1,733</td><td class="fp">74</td></tr><tr><th>actual 1</th><td class="fn">37</td><td class="tp">156</td></tr></tbody></table></div>
+</div>
+<div class="predict" data-answer="a">
+  <div class="q">Lowering the cutoff from 0.5 to 0.2 lowers overall accuracy (95.9% → 94.5%). Could 0.2 still be the better business choice?</div>
+  <div class="opts"><button class="opt">Yes: it finds 156 of 193 acceptors instead of 128, and missing a likely acceptor may cost more than mailing an extra offer</button><button class="opt">No: higher accuracy is always better</button><button class="opt">No: cutoffs must be 0.5 for logistic regression</button></div>
+  <div class="reveal"><p><b>A.</b> Accuracy treats every error the same. Lecture 5 gives us the tools (sensitivity, specificity, ROC, lift) to choose a cutoff that matches the decision, and Lecture 12 adds explicit costs.</p></div>
+</div>
+</section>
+
+<section class="lsec" id="code">
+<h2>Code walk: who will accept a personal loan?</h2>
+<div class="codewalk-head"><p style="margin:0">Data: <a href="../data/UniversalBank.csv" download>UniversalBank.csv</a>: 5,000 customers, 480 accepted the last campaign’s offer.</p><span class="lang-switch-slot"></span></div>
+<div class="step" data-step="1"><h3>Prepare</h3>
+<pre class="code r">
+bank <- read.csv("data/UniversalBank.csv")
+bank <- bank[, !(names(bank) %in% c("ID", "ZIP.Code"))]
+bank$Education <- factor(bank$Education, levels = 1:3,
+                         labels = c("Undergrad", "Graduate", "Advanced"))
+set.seed(1)
+train_idx <- sample(nrow(bank), 0.6 * nrow(bank))
+train <- bank[train_idx, ]; valid <- bank[-train_idx, ]
+mean(bank$Personal.Loan)          # 0.096
+</pre>
+<pre class="code py">
+import pandas as pd, numpy as np
+from sklearn.model_selection import train_test_split
+bank = pd.read_csv("data/UniversalBank.csv").drop(columns=["ID", "ZIP Code"])
+bank["Education"] = pd.Categorical(bank["Education"].map({1: "Undergrad", 2: "Graduate", 3: "Advanced"}),
+                                   categories=["Undergrad", "Graduate", "Advanced"])
+X = pd.get_dummies(bank.drop(columns="Personal Loan"), drop_first=True, dtype=int)
+y = bank["Personal Loan"]
+X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.4, random_state=1)
+print(y.mean())                   # 0.096
+</pre>
+</div>
+<div class="step" data-step="2"><h3>Fit and read odds ratios</h3>
+<pre class="code r">
+logit <- glm(Personal.Loan ~ ., data = train, family = "binomial")
+summary(logit)
+round(exp(coef(logit)), 3)        # odds ratios
+</pre>
+<pre class="code py">
+import statsmodels.api as sm      # for a summary table with p-values
+logit = sm.Logit(y_train, sm.add_constant(X_train)).fit()
+print(logit.summary())
+print(np.exp(logit.params).round(3))   # odds ratios
+</pre>
+<div class="see"><b>What you should see:</b> positive, highly significant coefficients for Income, Family, CCAvg, CD Account and both education dummies (≈ +4.2 to +4.4); negative ones for Online, CreditCard and Securities Account.</div>
+</div>
+<div class="step" data-step="3"><h3>Predict probabilities, then classes</h3>
+<pre class="code r">
+prob <- predict(logit, newdata = valid, type = "response")   # type="response" gives p, not logit!
+head(round(prob, 3))
+library(caret)
+for (cut in c(0.5, 0.2)) {
+  pred <- factor(ifelse(prob >= cut, 1, 0), levels = c(0, 1))
+  print(confusionMatrix(pred, factor(valid$Personal.Loan), positive = "1")$table)
+}
+</pre>
+<pre class="code py">
+from sklearn.metrics import confusion_matrix, accuracy_score
+prob = logit.predict(sm.add_constant(X_valid))
+for cut in (0.5, 0.2):
+    pred = (prob >= cut).astype(int)
+    print(cut, accuracy_score(y_valid, pred)); print(confusion_matrix(y_valid, pred))
+</pre>
+<div class="see"><b>What you should see:</b> with this split, cutoff 0.5 gives ≈ 96% accuracy but misses about a third of the acceptors; cutoff 0.2 catches ≈ 80% of them. Your exact counts depend on the split.</div>
+</div>
+<div class="step" data-step="4"><h3>Score a new customer</h3>
+<pre class="code r">
+new <- data.frame(Age = 40, Experience = 15, Income = 120, Family = 3, CCAvg = 3,
+                  Education = factor("Graduate", levels = levels(bank$Education)),
+                  Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 0)
+predict(logit, new, type = "response")
+</pre>
+<pre class="code py">
+new = pd.DataFrame([dict(Age=40, Experience=15, Income=120, Family=3, CCAvg=3, Mortgage=0,
+                         **{"Securities Account": 0, "CD Account": 0}, Online=1, CreditCard=0,
+                         Education_Graduate=1, Education_Advanced=0)])[X.columns]
+print(logit.predict(sm.add_constant(new, has_constant="add")))
+</pre>
+</div>
+</section>
+
+<section class="lsec" id="pitfalls">
+<h2>Common pitfalls</h2>
+<ul>
+  <li><b>Forgetting <code>type = "response"</code></b> in R, which returns logits, not probabilities.</li>
+  <li><b>Reading β as a change in probability.</b> It is a change in log-odds; \(e^\beta\) multiplies odds.</li>
+  <li><b>Defaulting to a 0.5 cutoff</b> with imbalanced classes.</li>
+  <li><b>Perfect separation:</b> if a predictor splits the classes perfectly, coefficients explode and warnings appear. Consider regularisation (L6).</li>
+  <li><b>Numeric codes for categories:</b> Education 1/2/3 as a number assumes equal steps. Use a factor.</li>
+</ul>
+</section>
+
+<section class="lsec" id="check">
+<h2>Check yourself</h2>
+<div class="quiz">
+  <div class="qq" data-answer="b"><div class="q">If p = 0.8, the odds are…</div><div class="opts"><button class="opt">0.8</button><button class="opt">4</button><button class="opt">0.25</button><button class="opt">1.6</button></div><div class="why">0.8 / 0.2 = 4: four to one in favour.</div></div>
+  <div class="qq" data-answer="d"><div class="q">A coefficient of −0.69 on Online means online users’ odds of acceptance are…</div><div class="opts"><button class="opt">0.69 lower</button><button class="opt">69% lower in probability</button><button class="opt">doubled</button><button class="opt">about half (× e<sup>−0.69</sup> ≈ 0.50)</button></div><div class="why">Exponentiate to get the odds ratio.</div></div>
+  <div class="qq" data-answer="a"><div class="q">Logistic regression coefficients are estimated by…</div><div class="opts"><button class="opt">maximum likelihood</button><button class="opt">ordinary least squares on 0/1</button><button class="opt">cross-validation</button><button class="opt">the cutoff value</button></div><div class="why">MLE picks β to make the observed labels most probable.</div></div>
+  <div class="qq" data-answer="c"><div class="q">Lowering the cutoff from 0.5 to 0.2 will generally…</div><div class="opts"><button class="opt">reduce the number of predicted 1s</button><button class="opt">change the coefficients</button><button class="opt">increase the number of predicted 1s, catching more true 1s and more false alarms</button><button class="opt">have no effect on the confusion matrix</button></div><div class="why">The cutoff moves the decision boundary; the fitted model is unchanged.</div></div>
+  <div class="qq" data-answer="b"><div class="q">Why not just use linear regression on a 0/1 outcome?</div><div class="opts"><button class="opt">It is too slow</button><button class="opt">It can predict values outside [0, 1] and assumes a constant effect on probability</button><button class="opt">It can’t handle dummy variables</button><button class="opt">It always has lower accuracy</button></div><div class="why">The S-curve keeps predictions valid and lets effects shrink near 0 and 1.</div></div>
+</div>
+</section>
+
+</article>
+<aside class="lec-side" aria-label="Sections"></aside>
+</div>
+</div></main>
+<div id="site-footer"></div>
+<script src="../assets/js/course-config.js"></script>
+<script src="../assets/js/schedule-data.js"></script>
+<script src="../assets/js/site.js"></script>
+<script src="../assets/js/lecture.js"></script>
+<script src="../assets/js/demos/w04.js"></script>
+<script defer src="../assets/vendor/hljs/highlight.min.js"></script>
+<script defer src="../assets/vendor/hljs/r.min.js"></script>
+<script defer src="../assets/vendor/katex/katex.min.js"></script>
+<script defer src="../assets/vendor/katex/auto-render.min.js"></script>
+</body>
+</html>
